@@ -14,3 +14,9 @@ uv run mypy --strict src tests
 # uv run mypy --explicit-package-bases src tests
 # uv run mypy --explicit-package-bases --check-untyped-defs src tests
 # uv run mypy --strict src tests
+
+uv run semgrep --config=auto --config=p/security-audit --error src tests
+
+uv run coverage run -m pytest tests/
+uv run coverage report
+uv run coverage xml

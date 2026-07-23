@@ -21,6 +21,7 @@ dev = [
     "pytest-cov>=7.0.0",
     "ruff>=0.11.13",
     "vulture>=2.16",
+    "semgrep>=1.90.0",
 ]
 
 [tool.mypy]
@@ -117,6 +118,8 @@ select = [
     "E303",
     "E305",
     "E306",
+    # McCabe complexity gate â€” replaces a standalone `mccabe` CLI call
+    "C90",
 ]
 # S101: we don't optimize out sanity asserts.
 # PT001 Checks for argument-free @pytest.fixture() decorators with or without parentheses, depending on the lint.flake8-pytest-style.fixture-parentheses setting
@@ -204,3 +207,16 @@ skip-magic-trailing-comma = false
 # Like Black, automatically detect the appropriate line ending.
 line-ending = "auto"
 docstring-code-format = true
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 75
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
