@@ -49,8 +49,6 @@ $env:UV_ENV_FILE = ".dev.env" ;
 
 .\scripts\format_and_lint.ps1 ; 
 
-pytest tests/ --cov=src -vv ; 
-
 ##### RUN APPLICATION LOCALLY
 
 Start-Process uv -ArgumentList "run", "python", "src\main.py" ; 
