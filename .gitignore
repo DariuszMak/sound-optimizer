@@ -104,9 +104,6 @@ venv/
 ENV/
 Pipfile
 
-# UV
-uv.lock
-
 # SSL Certs
 .ca
 
