@@ -19,7 +19,7 @@ TRIM_THRESHOLD_DB = 45.0
 MAX_PRE_GAIN_DB = 30.0
 TRUE_PEAK_CEILING_DB = -1.0
 
-SUPPORTED = (".wav", ".mp3", ".flac", ".ogg", ".m4a")
+SUPPORTED = (".wav", ".mp3", ".flac", ".ogg", ".m4a", ".wma", ".mpc")
 INPUT_ROOT = "."
 OUTPUT_ROOT = "processed"
 EXCLUDED_DIRS = {".venv", "processed", "__pycache__"}
