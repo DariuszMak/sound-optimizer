@@ -51,16 +51,21 @@ def test_remove_long_silences_multi(sample_rate: int) -> None:
     sine1 = generate_sine_wave(duration_sec=1.0, sr=sample_rate)
     silence = np.zeros(int(sample_rate * 2.5), dtype=np.float32)  # 2.5 sec silence
     sine2 = generate_sine_wave(duration_sec=1.0, sr=sample_rate)
-
-    signal = np.concatenate([sine1, silence, sine2])
-
-    processed = remove_long_silences_multi(signal, sr=sample_rate, silence_db=45.0, min_silence_sec=2.0)
-
+    
+    # Reshape to a 2D array (samples, channels) as expected by the source code
+    signal = np.concatenate([sine1, silence, sine2]).reshape(-1, 1)
+    
+    processed = remove_long_silences_multi(
+        signal, 
+        sr=sample_rate, 
+        silence_db=45.0, 
+        min_silence_sec=2.0
+    )
+    
     # Total input is 4.5s. Since 2.5s silence > 2.0s limit, it should be removed.
     # Output should be roughly 2s (plus small crossfade leniency).
     assert len(processed) < sample_rate * 2.5
     assert len(processed) >= sample_rate * 2.0
-
 
 def test_measure_lufs(sample_rate: int) -> None:
     """Test that LUFS metering requires a minimum audio length and returns valid floats."""
