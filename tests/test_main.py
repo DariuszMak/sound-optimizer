@@ -1,4 +1,5 @@
 import os
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
@@ -11,6 +12,9 @@ from src.main import (
     remove_long_silences_multi,
     trim_silence_multi,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def generate_sine_wave(duration_sec: float = 1.0, sr: int = 44100, freq: float = 440.0, amp: float = 0.5) -> np.ndarray:
@@ -78,7 +82,7 @@ def test_limiter(sample_rate: int) -> None:
     assert max_peak > 0.0
 
 
-def test_process_audio_end_to_end(tmp_path: pytest.TempPathFactory, sample_rate: int) -> None:
+def test_process_audio_end_to_end(tmp_path: Path, sample_rate: int) -> None:
     """Test the entire audio pipeline by mocking file I/O on disk."""
 
     sine = generate_sine_wave(duration_sec=2.0, sr=sample_rate, amp=0.5)
