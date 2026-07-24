@@ -1,5 +1,2 @@
-docker-compose down --remove-orphans ; 
-docker-compose build ; 
-docker-compose up -d ; 
-
-Start-Process "http://127.0.0.1:5005" ; 
+Start-Process uv -ArgumentList "run", "python", "src\main.py" ; 
+# uv run python src\main.py ; 

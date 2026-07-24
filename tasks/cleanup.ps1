@@ -1,15 +1,7 @@
 deactivate ; 
 clear ; 
 
-# docker system df ; 
-# docker compose down -v --remove-orphans ; 
-# docker stop $(docker ps -a -q) ; 
-# docker rm -f $(docker ps -a -q) ; 
-# docker system prune --volumes -a -f ; 
-# docker volume rm -f $(docker volume ls -q) ; 
-# docker system df ; 
-
-# $ports = 5005, 5433
+# $ports = 8000, 8001
 # 
 # foreach ($port in $ports) {
 #     $conns = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue
