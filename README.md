@@ -5,18 +5,33 @@
 - [UV](https://github.com/astral-sh/uv) package manager
 
 
-## Local development (Windows PowerShell):
+### Project structure diagrams
 
-You can also use VSCode `settings.json` and `launch.json` files to run the project (choose interpreter created by UV).
+##### Modular perspective
 
-## Fast native Windows development:
+<p align="center">
+  <img src="images/structure_module.svg" alt="Modular perspective" width="600">
+</p>
+
+##### Library dependencies perspective
+
+<p align="center">
+  <img src="images/structure_module_clustered.svg" alt="Library dependencies perspective" width="600">
+</p>
+
+## Requirements
+
+- [UV](https://github.com/astral-sh/uv) package manager
+- [Task](https://taskfile.dev/docs/installation) runner
+
+### Fast Windows dev
 
 ```commandline
+task full-dev-native ; 
+```
 
+### Generate diagrams
 
-##### STATIC ANALYSIS & TESTS
-
-
-##### RUN APPLICATION LOCALLY
-
+```commandline
+task generate-diagrams ; 
 ```
