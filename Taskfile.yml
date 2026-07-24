@@ -1,0 +1,37 @@
+version: '3'
+
+env:
+  UV_ENV_FILE: .dev.env
+
+tasks:
+
+  cleanup:
+    desc: Full project cleanup (docker, git, ports, caches)
+    cmds:
+      - powershell -ExecutionPolicy Bypass -File tasks/cleanup.ps1
+
+  dev-env:
+    desc: Setup uv environment (Python, sync, lock)
+    cmds:
+      - powershell -ExecutionPolicy Bypass -File tasks/dev_uv_environment.ps1
+
+  local-static-tests:
+    desc: Static analysis
+    cmds:
+      - powershell -ExecutionPolicy Bypass -File tasks/static_analysis_and_tests.ps1
+
+  generate-diagrams:
+    desc: Generate project diagrams
+    cmds:
+      - powershell -ExecutionPolicy Bypass -File tasks/generate_diagrams.ps1
+
+
+  full-dev-native:
+    desc: Fast native Windows development flow
+    deps:
+      - cleanup
+    cmds:
+      - task: dev-env
+      - task: local-static-tests
+      - task: kibana-elastic
+      - powershell -ExecutionPolicy Bypass -File tasks/run_native_dev_application.ps1
