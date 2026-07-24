@@ -33,5 +33,4 @@ tasks:
     cmds:
       - task: dev-env
       - task: local-static-tests
-      - task: kibana-elastic
       - powershell -ExecutionPolicy Bypass -File tasks/run_native_dev_application.ps1
