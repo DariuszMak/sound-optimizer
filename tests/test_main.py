@@ -45,11 +45,10 @@ def test_apply_eq_for_metering(sample_rate: int) -> None:
     assert out.shape == sine.shape
     assert out.dtype == np.float32
 
-    # Test edge case branches (gain < 0.01, fc >= sr/2)
     bands = [
-        (1000.0, 0.0),  # Skipped due to 0 gain
-        (24000.0, 5.0),  # Skipped due to nyquist limit
-        (1000.0, 5.0),  # Processed
+        (1000.0, 0.0),
+        (24000.0, 5.0),
+        (1000.0, 5.0),
     ]
     out2 = apply_eq_for_metering(sine, sample_rate, bands=bands)
     assert out2.shape == sine.shape
@@ -68,7 +67,6 @@ def test_trim_silence_multi(sample_rate: int) -> None:
     assert len(trimmed) <= sample_rate * 1.01
     assert len(trimmed) >= sample_rate * 0.99
 
-    # Test completely silent arrays
     empty_1d = trim_silence_multi(np.zeros(100, dtype=np.float32), top_db=45.0)
     assert len(empty_1d) == 0
 
@@ -90,8 +88,6 @@ def test_remove_long_silences_multi(sample_rate: int) -> None:
     assert len(processed) < sample_rate * 2.5
     assert len(processed) >= int(sample_rate * 1.99)
 
-    # Test completely silent 2D arrays (longer than threshold).
-    # Source function expects 2D due to hardcoded axis=1.
     empty_2d = remove_long_silences_multi(np.zeros((sample_rate * 3, 2), dtype=np.float32), sample_rate)
     assert len(empty_2d) == 0
     assert empty_2d.shape[1] == 2
@@ -120,19 +116,17 @@ def test_smooth_gain(sample_rate: int) -> None:
 
 def test_dynamic_loudness_control(sample_rate: int) -> None:
     """Test dynamic loudness control over varying volumes."""
-    # Ensure sine inputs are 2-dimensional as required by source's broadcasting
+
     sine = generate_sine_wave(duration_sec=9.0, sr=sample_rate).reshape(-1, 1)
     out = dynamic_loudness_control(sine, sample_rate, target_lufs=-16.0, window_sec=8.0)
 
     assert out.shape == sine.shape
     assert out.dtype == np.float32
 
-    # Test with audio too short for dynamic processing
     short_sine = generate_sine_wave(duration_sec=1.0, sr=sample_rate).reshape(-1, 1)
     out_short = dynamic_loudness_control(short_sine, sample_rate, target_lufs=-16.0, window_sec=8.0)
     np.testing.assert_array_equal(out_short, short_sine)
 
-    # Test with pure silence which raises ValueError in pyln meter
     silence = np.zeros((sample_rate * 9, 1), dtype=np.float32)
     out_silence = dynamic_loudness_control(silence, sample_rate, target_lufs=-16.0, window_sec=8.0)
     np.testing.assert_array_equal(out_silence, silence)
@@ -150,7 +144,6 @@ def test_limiter(sample_rate: int) -> None:
     assert max_peak <= ceiling_lin + 0.05
     assert max_peak > 0.0
 
-    # Test multichannel limiter
     loud_2d = np.column_stack((loud_signal, loud_signal))
     limited_2d = limiter(loud_2d, sr=sample_rate, ceiling_db=ceiling_db)
 
@@ -166,17 +159,14 @@ def test_load_and_export_audio(tmp_path: Path, sample_rate: int) -> None:
 
     out_path = str(tmp_path / "test_out.mp3")
 
-    # Test export (multi-channel)
     export_audio(sine_2d, sample_rate, out_path, audio_format="mp3")
     assert os.path.exists(out_path)
 
-    # Test load valid
     loaded, sr = load_audio(out_path)
     assert loaded is not None
     assert sr is not None
     assert loaded.ndim == 2
 
-    # Test load invalid path
     invalid_path = str(tmp_path / "does_not_exist.mp3")
     loaded_inv, sr_inv = load_audio(invalid_path)
     assert loaded_inv is None
@@ -204,16 +194,14 @@ def test_process_audio_end_to_end(tmp_path: Path, sample_rate: int) -> None:
 
 def test_process_audio_edge_cases(tmp_path: Path, sample_rate: int) -> None:
     """Test early returns and multichannel handling in process_audio."""
-    # 1. Output file already exists
+
     out_existing = str(tmp_path / "exists.mp3")
     with open(out_existing, "w") as f:
         f.write("dummy")
     process_audio(("nonexistent.wav", out_existing))
 
-    # 2. Input file invalid
     process_audio(("invalid.wav", str(tmp_path / "out_invalid.mp3")))
 
-    # 3. Trim silence yields empty array
     silence = np.zeros(sample_rate * 2, dtype=np.float32)
     segment_sil = AudioSegment(
         (silence * 32767).astype(np.int16).tobytes(), frame_rate=sample_rate, sample_width=2, channels=1
@@ -225,7 +213,6 @@ def test_process_audio_edge_cases(tmp_path: Path, sample_rate: int) -> None:
     process_audio((silence_in, silence_out))
     assert not os.path.exists(silence_out)
 
-    # 4. Multichannel processing test
     sine = generate_sine_wave(duration_sec=3.0, sr=sample_rate)
     sine_2d = np.column_stack((sine, sine))
     segment_multi = AudioSegment(
@@ -265,11 +252,10 @@ def test_collect_audio_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
 
 def test_main(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test the main entrypoint and multiprocessing pool handling."""
-    # Test exit on empty tasks
+
     with patch("src.main.collect_audio_files", return_value=[]):
         main()
 
-    # Test processing loop with mocked tasks
     tasks = [("in.wav", "out.mp3")]
     with (
         patch("src.main.collect_audio_files", return_value=tasks),
