@@ -17,6 +17,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "mypy>=1.16.0",
+    "import-linter>=2.11",
     "pip-audit>=2.9.0",
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
