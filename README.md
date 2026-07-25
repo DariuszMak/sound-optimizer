@@ -1,4 +1,9 @@
-# Python project
+# Python sound optimizer project
+
+<p align="center">
+  <img src="images/drawings/Flow.png" alt="Flow" width="600">
+</p>
+
 
 ## Requirements
 
