@@ -4,12 +4,6 @@
   <img src="images/drawings/Flow.png" alt="Flow" width="600">
 </p>
 
-
-## Requirements
-
-- [UV](https://github.com/astral-sh/uv) package manager
-
-
 ### Project structure diagrams
 
 ##### Modular perspective
