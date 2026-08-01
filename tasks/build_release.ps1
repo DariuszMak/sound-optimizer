@@ -10,6 +10,7 @@ $env:UV_ENV_FILE = ".dev.env" ;
 uv run pytest tests/ --cov=src -vv ;
 uv sync --no-dev --locked --no-cache ; 
 uv run pyinstaller --clean .\scripts\standalone_build_windows.spec ; 
-rm -r -fo .\releases\windows\* ; 
+New-Item -ItemType Directory -Force -Path .\releases\windows | Out-Null ; 
+if (Test-Path .\releases\windows\*) { rm -r -fo .\releases\windows\* } ; 
 cp -r -fo .\dist\* .\releases\windows\ ; 
 rm -r -fo .\dist, .\build ;
