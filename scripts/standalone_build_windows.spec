@@ -4,14 +4,12 @@ from pathlib import Path
 
 block_cipher = None
 
+ffmpeg_binaries = [(f, 'ffmpeg') for f in glob.glob('..\\referential\\ffmpeg\\*')]
+
 a = Analysis(
     ['..\\src\\main.py'],
     pathex=['..\\src'],
-    binaries=[
-        ('..\\referential\\ffmpeg\\ffmpeg.exe', 'ffmpeg'),
-        ('..\\referential\\ffmpeg\\ffprobe.exe', 'ffprobe'),
-        ('..\\referential\\ffmpeg\\ffplay.exe', 'ffplay'),
-    ],
+    binaries=ffmpeg_binaries,
     datas=[],
     hiddenimports=[],
     hookspath=[],
