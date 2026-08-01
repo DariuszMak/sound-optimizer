@@ -1,9 +1,8 @@
 import contextlib
 import os
 import warnings
-from multiprocessing import Pool, cpu_count
-from typing import TypeAlias, cast
 from multiprocessing import Pool, cpu_count, freeze_support
+from typing import TypeAlias, cast
 
 import numpy as np
 import pyloudnorm as pyln
@@ -341,7 +340,6 @@ def main() -> None:
                 unit="file",
             )
         )
-
 
 
 if __name__ == "__main__":
