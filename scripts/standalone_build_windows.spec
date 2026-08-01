@@ -8,20 +8,7 @@ a = Analysis(
     ['..\\src\\main.py'],
     pathex=['..\\src'],
     binaries=[],
-    datas=[
-        (
-            str(Path('..', 'src', 'ui', 'pyside_ui', 'themes', 'main_theme.qss')),
-            'src/ui/pyside_ui/themes',
-        ),
-        (
-            str(Path('..', 'src', 'backend', 'openmeteo', 'places', 'places.json')),
-            'src/backend/openmeteo/places',
-        ),
-        (
-            str(Path('..', 'src', 'ui', 'react_ui', 'static')),
-            'static',
-        ),
-    ],
+    datas=[],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -54,7 +41,7 @@ exe = EXE(
     upx_exclude=[],
     runtime_tmpdir=None,
     console=True,
-    icon='..\\src\\ui\\pyside_ui\\forms\\icons\\images\\program_icon.ico',
+    icon='..\\images\\icons\\program_icon.ico',
 )
 
 coll = COLLECT(
