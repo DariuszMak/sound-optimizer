@@ -59,6 +59,7 @@ EQ_Q = 1.0
 
 warnings.filterwarnings("ignore")
 
+
 def _peaking_biquad(
     fc: float,
     gain_db: float,

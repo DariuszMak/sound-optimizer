@@ -9,8 +9,8 @@ a = Analysis(
     pathex=['..\\src'],
     binaries=[
         ('..\\referential\\ffmpeg\\ffmpeg.exe', 'ffmpeg'),
-        ('..\\referential\\ffmpeg\\ffprobe.exe', 'ffmpeg'),
-        ('..\\referential\\ffmpeg\\ffplay.exe', 'ffmpeg'),
+        ('..\\referential\\ffmpeg\\ffprobe.exe', 'ffprobe'),
+        ('..\\referential\\ffmpeg\\ffplay.exe', 'ffplay'),
     ],
     datas=[],
     hiddenimports=[],
