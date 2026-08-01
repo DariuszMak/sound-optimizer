@@ -6,13 +6,6 @@ from multiprocessing import Pool, cpu_count, freeze_support
 from pathlib import Path
 from typing import TypeAlias, cast
 
-import numpy as np
-import pyloudnorm as pyln
-from numpy.typing import NDArray
-from pydub import AudioSegment
-from scipy.signal import lfilter
-from tqdm import tqdm
-
 
 def _resolve_ffmpeg_dir() -> Path:
     """Locate the bundled ffmpeg folder, whether frozen or running from source.
@@ -36,9 +29,20 @@ def _resolve_ffmpeg_dir() -> Path:
 # AudioSegment.converter after the fact (which works for actual conversions
 # but leaves the misleading warning behind).
 _FFMPEG_DIR = _resolve_ffmpeg_dir()
+print(f"[ffmpeg-debug] frozen={getattr(sys, 'frozen', False)}", file=sys.stderr)
+print(f"[ffmpeg-debug] sys.executable={sys.executable}", file=sys.stderr)
+print(f"[ffmpeg-debug] resolved ffmpeg dir={_FFMPEG_DIR}", file=sys.stderr)
+print(f"[ffmpeg-debug] dir exists={_FFMPEG_DIR.exists()}", file=sys.stderr)
 if _FFMPEG_DIR.exists():
+    print(f"[ffmpeg-debug] dir contents={list(_FFMPEG_DIR.iterdir())}", file=sys.stderr)
     os.environ["PATH"] = str(_FFMPEG_DIR) + os.pathsep + os.environ.get("PATH", "")
 
+import numpy as np
+import pyloudnorm as pyln
+from numpy.typing import NDArray
+from pydub import AudioSegment
+from scipy.signal import lfilter
+from tqdm import tqdm
 
 Float32Array: TypeAlias = NDArray[np.float32]
 Float64Array: TypeAlias = NDArray[np.float64]
