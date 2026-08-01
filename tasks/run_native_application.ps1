@@ -1,1 +1,1 @@
-Start-Process .\dist\GUI_client.exe ; 
+Start-Process .\releases\windows\GUI_client.exe ; 
