@@ -156,3 +156,6 @@ files_rc.py
 
 # SQLite
 *.sqlite
+
+# Project folders
+processed
