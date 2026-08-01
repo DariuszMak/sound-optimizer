@@ -3,6 +3,7 @@ import os
 import sys
 import warnings
 from multiprocessing import Pool, cpu_count, freeze_support
+from pathlib import Path
 from typing import TypeAlias, cast
 
 import numpy as np
@@ -11,13 +12,6 @@ from numpy.typing import NDArray
 from pydub import AudioSegment
 from scipy.signal import lfilter
 from tqdm import tqdm
-
-if getattr(sys, "frozen", False):
-    _base_dir = os.path.dirname(sys.executable)
-    _ffmpeg_dir = os.path.join(_base_dir, "ffmpeg")
-    AudioSegment.converter = os.path.join(_ffmpeg_dir, "ffmpeg.exe")
-    AudioSegment.ffprobe = os.path.join(_ffmpeg_dir, "ffprobe.exe")
-    os.environ["PATH"] = _ffmpeg_dir + os.pathsep + os.environ.get("PATH", "")
 
 Float32Array: TypeAlias = NDArray[np.float32]
 Float64Array: TypeAlias = NDArray[np.float64]
@@ -32,6 +26,28 @@ INPUT_ROOT = "."
 OUTPUT_ROOT = "processed"
 EXCLUDED_DIRS = {".venv", "processed", "__pycache__"}
 
+
+def _configure_ffmpeg() -> None:
+    """Point pydub at the bundled ffmpeg binaries, whether frozen or running from source."""
+    if getattr(sys, "frozen", False):
+        ffmpeg_dir = Path(sys.executable).resolve().parent / "ffmpeg"
+    else:
+        ffmpeg_dir = Path(__file__).resolve().parent.parent / "referential" / "ffmpeg"
+
+    ffmpeg_exe = ffmpeg_dir / "ffmpeg.exe"
+    ffprobe_exe = ffmpeg_dir / "ffprobe.exe"
+
+    if ffmpeg_exe.exists():
+        AudioSegment.converter = str(ffmpeg_exe)
+    if ffprobe_exe.exists():
+        AudioSegment.ffprobe = str(ffprobe_exe)
+
+    if ffmpeg_dir.exists():
+        os.environ["PATH"] = str(ffmpeg_dir) + os.pathsep + os.environ.get("PATH", "")
+
+
+_configure_ffmpeg()
+
 EQ_BANDS: list[tuple[float, float]] = [
     (60.0, 20 * np.log10(1.40)),
     (230.0, 20 * np.log10(1.20)),
@@ -42,7 +58,6 @@ EQ_BANDS: list[tuple[float, float]] = [
 EQ_Q = 1.0
 
 warnings.filterwarnings("ignore")
-
 
 def _peaking_biquad(
     fc: float,
