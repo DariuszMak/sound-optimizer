@@ -7,7 +7,11 @@ block_cipher = None
 a = Analysis(
     ['..\\src\\main.py'],
     pathex=['..\\src'],
-    binaries=[],
+    binaries=[
+        ('..\\referential\\ffmpeg\\ffmpeg.exe', 'ffmpeg'),
+        ('..\\referential\\ffmpeg\\ffprobe.exe', 'ffmpeg'),
+        ('..\\referential\\ffmpeg\\ffplay.exe', 'ffmpeg'),
+    ],
     datas=[],
     hiddenimports=[],
     hookspath=[],
