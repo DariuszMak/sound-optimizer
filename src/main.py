@@ -6,6 +6,13 @@ from multiprocessing import Pool, cpu_count, freeze_support
 from pathlib import Path
 from typing import TypeAlias, cast
 
+import numpy as np
+import pyloudnorm as pyln
+from numpy.typing import NDArray
+from pydub import AudioSegment
+from scipy.signal import lfilter
+from tqdm import tqdm
+
 
 def _resolve_ffmpeg_dir() -> Path:
     """Locate the bundled ffmpeg folder, whether frozen or running from source.
@@ -32,12 +39,6 @@ _FFMPEG_DIR = _resolve_ffmpeg_dir()
 if _FFMPEG_DIR.exists():
     os.environ["PATH"] = str(_FFMPEG_DIR) + os.pathsep + os.environ.get("PATH", "")
 
-import numpy as np
-import pyloudnorm as pyln
-from numpy.typing import NDArray
-from pydub import AudioSegment
-from scipy.signal import lfilter
-from tqdm import tqdm
 
 Float32Array: TypeAlias = NDArray[np.float32]
 Float64Array: TypeAlias = NDArray[np.float64]
