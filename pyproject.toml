@@ -24,6 +24,7 @@ dev = [
     "ruff>=0.11.13",
     "vulture>=2.16",
     "semgrep>=1.90.0",
+    "pyinstaller>=6.21.0",
 ]
 
 [tool.mypy]
