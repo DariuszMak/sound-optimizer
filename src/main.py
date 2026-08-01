@@ -1,5 +1,6 @@
 import contextlib
 import os
+import sys
 import warnings
 from multiprocessing import Pool, cpu_count, freeze_support
 from typing import TypeAlias, cast
@@ -10,7 +11,6 @@ from numpy.typing import NDArray
 from pydub import AudioSegment
 from scipy.signal import lfilter
 from tqdm import tqdm
-import sys
 
 if getattr(sys, "frozen", False):
     _base_dir = os.path.dirname(sys.executable)
