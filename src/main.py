@@ -6,6 +6,32 @@ from multiprocessing import Pool, cpu_count, freeze_support
 from pathlib import Path
 from typing import TypeAlias, cast
 
+
+def _resolve_ffmpeg_dir() -> Path:
+    """Locate the bundled ffmpeg folder, whether frozen or running from source.
+
+    In a frozen (PyInstaller onedir) build, GUI_client.exe lives inside
+    releases\\windows\\GUI_client_Windows\\ alongside a real "ffmpeg" folder
+    that was collected by the .spec file, so looking next to sys.executable
+    is correct here. This only holds for onedir builds - if the build is
+    ever switched to onefile, this must instead check sys._MEIPASS.
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent / "ffmpeg"
+    return Path(__file__).resolve().parent.parent / "referential" / "ffmpeg"
+
+
+# IMPORTANT: this must run BEFORE `from pydub import AudioSegment` below.
+# pydub does its own ffmpeg/avconv detection via shutil.which() the moment
+# it is imported, and prints a RuntimeWarning if PATH doesn't already
+# contain ffmpeg at that exact moment. Setting PATH first means pydub's
+# own detection succeeds silently, instead of us having to override
+# AudioSegment.converter after the fact (which works for actual conversions
+# but leaves the misleading warning behind).
+_FFMPEG_DIR = _resolve_ffmpeg_dir()
+if _FFMPEG_DIR.exists():
+    os.environ["PATH"] = str(_FFMPEG_DIR) + os.pathsep + os.environ.get("PATH", "")
+
 import numpy as np
 import pyloudnorm as pyln
 from numpy.typing import NDArray
@@ -28,22 +54,19 @@ EXCLUDED_DIRS = {".venv", "processed", "__pycache__"}
 
 
 def _configure_ffmpeg() -> None:
-    """Point pydub at the bundled ffmpeg binaries, whether frozen or running from source."""
-    if getattr(sys, "frozen", False):
-        ffmpeg_dir = Path(sys.executable).resolve().parent / "ffmpeg"
-    else:
-        ffmpeg_dir = Path(__file__).resolve().parent.parent / "referential" / "ffmpeg"
+    """Explicitly point pydub at the bundled ffmpeg/ffprobe executables.
 
-    ffmpeg_exe = ffmpeg_dir / "ffmpeg.exe"
-    ffprobe_exe = ffmpeg_dir / "ffprobe.exe"
+    Belt-and-suspenders on top of the PATH setup above: guarantees pydub
+    uses these exact binaries even if PATH-based `which()` detection ever
+    behaves unexpectedly (e.g. a stale system ffmpeg also on PATH).
+    """
+    ffmpeg_exe = _FFMPEG_DIR / "ffmpeg.exe"
+    ffprobe_exe = _FFMPEG_DIR / "ffprobe.exe"
 
     if ffmpeg_exe.exists():
         AudioSegment.converter = str(ffmpeg_exe)
     if ffprobe_exe.exists():
         AudioSegment.ffprobe = str(ffprobe_exe)
-
-    if ffmpeg_dir.exists():
-        os.environ["PATH"] = str(ffmpeg_dir) + os.pathsep + os.environ.get("PATH", "")
 
 
 _configure_ffmpeg()
