@@ -13,4 +13,3 @@ uv run pytest tests/ --cov=src -vv ;
 uv sync --no-dev --locked --no-cache ; 
 uv run pyinstaller --clean .\scripts\standalone_build_windows.spec ; 
 cp -r -fo .\dist\* .\releases\windows\ ; 
-rm -r -fo .\dist, .\build ; 
