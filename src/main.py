@@ -10,6 +10,14 @@ from numpy.typing import NDArray
 from pydub import AudioSegment
 from scipy.signal import lfilter
 from tqdm import tqdm
+import sys
+
+if getattr(sys, "frozen", False):
+    _base_dir = os.path.dirname(sys.executable)
+    _ffmpeg_dir = os.path.join(_base_dir, "ffmpeg")
+    AudioSegment.converter = os.path.join(_ffmpeg_dir, "ffmpeg.exe")
+    AudioSegment.ffprobe = os.path.join(_ffmpeg_dir, "ffprobe.exe")
+    os.environ["PATH"] = _ffmpeg_dir + os.pathsep + os.environ.get("PATH", "")
 
 Float32Array: TypeAlias = NDArray[np.float32]
 Float64Array: TypeAlias = NDArray[np.float64]
