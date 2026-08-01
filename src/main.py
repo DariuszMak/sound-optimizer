@@ -3,6 +3,7 @@ import os
 import warnings
 from multiprocessing import Pool, cpu_count
 from typing import TypeAlias, cast
+from multiprocessing import Pool, cpu_count, freeze_support
 
 import numpy as np
 import pyloudnorm as pyln
@@ -342,5 +343,7 @@ def main() -> None:
         )
 
 
+
 if __name__ == "__main__":
+    freeze_support()
     main()
