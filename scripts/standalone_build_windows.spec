@@ -32,6 +32,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
+    exclude_binaries=True,  
     name='GUI_client',
     debug=False,
     bootloader_ignore_signals=False,
