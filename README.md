@@ -22,6 +22,7 @@
 
 - [UV](https://github.com/astral-sh/uv) package manager
 - [Task](https://taskfile.dev/docs/installation) runner
+- [Ffmpeg](https://github.com/BtbN/FFmpeg-Builds/releases)
 
 ### Fast Windows dev
 
