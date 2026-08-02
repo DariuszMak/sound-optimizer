@@ -1,8 +1,14 @@
 # Python sound optimizer project
 
-<p align="center">
-  <img src="images/drawings/Flow.png" alt="Flow" width="600">
-</p>
+<table>
+  <tr>
+    <td align="center">
+        <a href="https://github.com/DariuszMak/sound-optimizer/releases/download/0.6.0/Sound_optimizer.exe">
+        <img src="images/drawings/Flow.png" alt="Flow" width="600">
+      </a>
+    </td>
+  </tr>
+</table>
 
 ### Project structure diagrams
 
