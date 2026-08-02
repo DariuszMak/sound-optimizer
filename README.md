@@ -9,6 +9,7 @@
 ##### Modular perspective
 
 <p align="center">
+  <a href="https://github.com/DariuszMak/sound-optimizer/releases/download/0.6.0/Sound_optimizer.exe">
   <img src="images/structure_module.svg" alt="Modular perspective" width="600">
 </p>
 
