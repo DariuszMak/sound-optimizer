@@ -1,6 +1,6 @@
 # Python sound optimizer project
 
-<table>
+<table align="center">
   <tr>
     <td align="center">
         <a href="https://github.com/DariuszMak/sound-optimizer/releases/download/0.6.0/Sound_optimizer.exe">
