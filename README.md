@@ -15,7 +15,7 @@
 ##### Modular perspective
 
 <p align="center">
-  <img src="images/structure_module.svg" alt="Modular perspective" width="600">
+  <img src="images/structure_module_pylib.svg" alt="Modular perspective" width="600">
 </p>
 
 ##### Library dependencies perspective
