@@ -1,4 +1,5 @@
 import contextlib
+import logging
 import os
 import shutil
 import warnings
@@ -28,6 +29,8 @@ EXCLUDED_DIRS = {".venv", "processed", "__pycache__"}
 FFMPEG_BINARY = "ffmpeg"
 ANSI_RED = "\033[91m"
 ANSI_RESET = "\033[0m"
+
+logger = logging.getLogger(__name__)
 
 EQ_BANDS: list[tuple[float, float]] = [
     (60.0, 20 * np.log10(1.40)),
@@ -237,11 +240,12 @@ def check_ffmpeg_installed() -> bool:
     so the user can fix their environment before processing fails.
     """
     if shutil.which(FFMPEG_BINARY) is None:
-        print(
-            f"{ANSI_RED}ERROR: ffmpeg was not found on your system PATH. "
-            f"Please install ffmpeg (https://ffmpeg.org/download.html) and "
-            f"ensure it is available on PATH before running this script.{ANSI_RESET}",
-            flush=True,
+        logger.error(
+            "%sERROR: ffmpeg was not found on your system PATH. "
+            "Please install ffmpeg (https://ffmpeg.org/download.html) and "
+            "ensure it is available on PATH before running this script.%s",
+            ANSI_RED,
+            ANSI_RESET,
         )
         return False
     return True
@@ -350,6 +354,8 @@ def collect_audio_files() -> list[tuple[str, str]]:
 
 
 def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+
     if not check_ffmpeg_installed():
         return
 

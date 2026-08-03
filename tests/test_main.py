@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
@@ -31,30 +32,36 @@ if TYPE_CHECKING:
     import pytest
 
 
-def test_check_ffmpeg_installed_present(capfd: pytest.CaptureFixture[str]) -> None:
-    """Test that no warning is printed and True is returned when ffmpeg is found."""
-    with patch("src.main.shutil.which", return_value="/usr/bin/ffmpeg") as mock_which:
+def test_check_ffmpeg_installed_present(caplog: pytest.LogCaptureFixture) -> None:
+    """Test that no warning is logged and True is returned when ffmpeg is found."""
+    with (
+        patch("src.main.shutil.which", return_value="/usr/bin/ffmpeg") as mock_which,
+        caplog.at_level(logging.ERROR, logger="src.main"),
+    ):
         result = check_ffmpeg_installed()
 
     mock_which.assert_called_once_with("ffmpeg")
     assert result is True
-
-    captured = capfd.readouterr()
-    assert captured.out == ""
+    assert caplog.records == []
 
 
-def test_check_ffmpeg_installed_missing(capfd: pytest.CaptureFixture[str]) -> None:
-    """Test that a red warning is printed and False is returned when ffmpeg is missing."""
-    with patch("src.main.shutil.which", return_value=None) as mock_which:
+def test_check_ffmpeg_installed_missing(caplog: pytest.LogCaptureFixture) -> None:
+    """Test that a red error is logged and False is returned when ffmpeg is missing."""
+    with (
+        patch("src.main.shutil.which", return_value=None) as mock_which,
+        caplog.at_level(logging.ERROR, logger="src.main"),
+    ):
         result = check_ffmpeg_installed()
 
     mock_which.assert_called_once_with("ffmpeg")
     assert result is False
 
-    captured = capfd.readouterr()
-    assert "ffmpeg" in captured.out
-    assert "\033[91m" in captured.out
-    assert "\033[0m" in captured.out
+    assert len(caplog.records) == 1
+    record = caplog.records[0]
+    assert record.levelno == logging.ERROR
+    assert "ffmpeg" in record.message
+    assert "\033[91m" in record.message
+    assert "\033[0m" in record.message
 
 
 def test_peaking_biquad() -> None:
