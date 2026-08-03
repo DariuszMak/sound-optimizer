@@ -292,8 +292,11 @@ def test_main(monkeypatch: pytest.MonkeyPatch) -> None:
     with (
         patch("src.main.check_ffmpeg_installed", return_value=True),
         patch("src.main.collect_audio_files", return_value=[]),
+        patch("src.main.wait_for_keypress") as mock_wait_empty,
     ):
         main()
+
+    mock_wait_empty.assert_called_once()
 
     tasks = [("in.wav", "out.mp3")]
     with (
@@ -301,6 +304,7 @@ def test_main(monkeypatch: pytest.MonkeyPatch) -> None:
         patch("src.main.collect_audio_files", return_value=tasks),
         patch("src.main.Pool") as mock_pool,
         patch("src.main.tqdm"),
+        patch("src.main.wait_for_keypress") as mock_wait,
     ):
         mock_pool_instance = MagicMock()
         mock_pool.return_value.__enter__.return_value = mock_pool_instance
@@ -309,6 +313,7 @@ def test_main(monkeypatch: pytest.MonkeyPatch) -> None:
         main()
 
         mock_pool_instance.imap_unordered.assert_called_once()
+        mock_wait.assert_called_once()
 
 
 def test_main_missing_ffmpeg() -> None:
@@ -317,9 +322,73 @@ def test_main_missing_ffmpeg() -> None:
         patch("src.main.check_ffmpeg_installed", return_value=False) as mock_check,
         patch("src.main.collect_audio_files") as mock_collect,
         patch("src.main.Pool") as mock_pool,
+        patch("src.main.wait_for_keypress") as mock_wait,
     ):
         main()
 
         mock_check.assert_called_once()
         mock_collect.assert_not_called()
         mock_pool.assert_not_called()
+        mock_wait.assert_called_once()
+
+
+def test_wait_for_keypress_non_interactive() -> None:
+    """Test that non-TTY stdin (piped input, CI) returns immediately without blocking."""
+    with (
+        patch("src.main.sys.stdin.isatty", return_value=False),
+        patch("src.main.os.name", "nt"),
+    ):
+        import src.main as main_module
+
+        main_module.wait_for_keypress()  # should return immediately, no hang
+
+
+def test_wait_for_keypress_windows(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test the Windows code path uses msvcrt.getch() to read a single keypress."""
+    import sys
+    import types
+
+    mock_msvcrt = types.ModuleType("msvcrt")
+    mock_msvcrt.getch = MagicMock(return_value=b"x")  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "msvcrt", mock_msvcrt)
+
+    with (
+        patch("src.main.sys.stdin.isatty", return_value=True),
+        patch("src.main.os.name", "nt"),
+    ):
+        import src.main as main_module
+
+        main_module.wait_for_keypress()
+
+    mock_msvcrt.getch.assert_called_once()
+
+
+def test_wait_for_keypress_posix(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test the POSIX code path reads a single raw keypress via termios/tty."""
+    import sys
+    import types
+
+    mock_termios = types.ModuleType("termios")
+    mock_termios.tcgetattr = MagicMock(return_value=["old_settings"])  # type: ignore[attr-defined]
+    mock_termios.tcsetattr = MagicMock()  # type: ignore[attr-defined]
+    mock_termios.TCSADRAIN = 1  # type: ignore[attr-defined]
+
+    mock_tty = types.ModuleType("tty")
+    mock_tty.setraw = MagicMock()  # type: ignore[attr-defined]
+
+    monkeypatch.setitem(sys.modules, "termios", mock_termios)
+    monkeypatch.setitem(sys.modules, "tty", mock_tty)
+
+    with (
+        patch("src.main.sys.stdin.isatty", return_value=True),
+        patch("src.main.sys.stdin.fileno", return_value=0),
+        patch("src.main.sys.stdin.read", return_value="x") as mock_read,
+        patch("src.main.os.name", "posix"),
+    ):
+        import src.main as main_module
+
+        main_module.wait_for_keypress()
+
+    mock_tty.setraw.assert_called_once_with(0)
+    mock_read.assert_called_once_with(1)
+    mock_termios.tcsetattr.assert_called_once_with(0, 1, ["old_settings"])

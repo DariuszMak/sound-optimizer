@@ -2,6 +2,7 @@ import contextlib
 import logging
 import os
 import shutil
+import sys
 import warnings
 from multiprocessing import Pool, cpu_count, freeze_support
 from typing import TypeAlias, cast
@@ -251,6 +252,41 @@ def check_ffmpeg_installed() -> bool:
     return True
 
 
+def wait_for_keypress() -> None:
+    """Block until the user presses any key.
+
+    This keeps the console window open when the script is run by
+    double-clicking (e.g. on Windows), so the user has a chance to read
+    any messages before it closes. In non-interactive environments
+    (piped input, CI, test runners) stdin is not a TTY, so this returns
+    immediately without blocking.
+    """
+    if not sys.stdin.isatty():
+        return
+
+    logger.info("Press any key to continue...")
+
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            msvcrt.getch()
+        else:
+            import termios
+            import tty
+
+            fd = sys.stdin.fileno()
+            old_settings = termios.tcgetattr(fd)
+            try:
+                tty.setraw(fd)
+                sys.stdin.read(1)
+            finally:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    except Exception:
+        with contextlib.suppress(Exception):
+            input()
+
+
 def load_audio(path: str) -> tuple[Float32Array | None, int | None]:
     try:
         audio = AudioSegment.from_file(path)
@@ -356,23 +392,26 @@ def collect_audio_files() -> list[tuple[str, str]]:
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    if not check_ffmpeg_installed():
-        return
+    try:
+        if not check_ffmpeg_installed():
+            return
 
-    tasks = collect_audio_files()
-    if not tasks:
-        return
+        tasks = collect_audio_files()
+        if not tasks:
+            return
 
-    workers = max(1, cpu_count() // 2)
-    with Pool(workers) as pool:
-        list(
-            tqdm(
-                pool.imap_unordered(process_audio, tasks),
-                total=len(tasks),
-                desc="Processing audio",
-                unit="file",
+        workers = max(1, cpu_count() // 2)
+        with Pool(workers) as pool:
+            list(
+                tqdm(
+                    pool.imap_unordered(process_audio, tasks),
+                    total=len(tasks),
+                    desc="Processing audio",
+                    unit="file",
+                )
             )
-        )
+    finally:
+        wait_for_keypress()
 
 
 if __name__ == "__main__":
