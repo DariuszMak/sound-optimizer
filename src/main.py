@@ -276,12 +276,12 @@ def wait_for_keypress() -> None:
             import tty
 
             fd = sys.stdin.fileno()
-            old_settings = termios.tcgetattr(fd)
+            old_settings = termios.tcgetattr(fd)  # type: ignore[attr-defined]
             try:
-                tty.setraw(fd)
+                tty.setraw(fd)  # type: ignore[attr-defined]
                 sys.stdin.read(1)
             finally:
-                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)  # type: ignore[attr-defined]
     except Exception:
         with contextlib.suppress(Exception):
             input()
