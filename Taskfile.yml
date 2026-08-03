@@ -35,6 +35,7 @@ tasks:
       - task: local-static-tests
       - powershell -ExecutionPolicy Bypass -File tasks/run_native_dev_application.ps1
 
+
   build-release:
     desc: Build both Linux + Windows releases
     cmds:
@@ -50,7 +51,7 @@ tasks:
     deps:
       - cleanup
     cmds:
+      - task: local-static-tests
       - task: build-release
       - task: run-native-release
- 
       - powershell -Command "uv sync --dev --locked --no-cache"
