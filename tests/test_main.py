@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     import pytest
 
 
-def test_check_ffmpeg_installed_present(capsys: pytest.CaptureFixture[str]) -> None:
+def test_check_ffmpeg_installed_present(capfd: pytest.CaptureFixture[str]) -> None:
     """Test that no warning is printed and True is returned when ffmpeg is found."""
     with patch("src.main.shutil.which", return_value="/usr/bin/ffmpeg") as mock_which:
         result = check_ffmpeg_installed()
@@ -39,11 +39,11 @@ def test_check_ffmpeg_installed_present(capsys: pytest.CaptureFixture[str]) -> N
     mock_which.assert_called_once_with("ffmpeg")
     assert result is True
 
-    captured = capsys.readouterr()
+    captured = capfd.readouterr()
     assert captured.out == ""
 
 
-def test_check_ffmpeg_installed_missing(capsys: pytest.CaptureFixture[str]) -> None:
+def test_check_ffmpeg_installed_missing(capfd: pytest.CaptureFixture[str]) -> None:
     """Test that a red warning is printed and False is returned when ffmpeg is missing."""
     with patch("src.main.shutil.which", return_value=None) as mock_which:
         result = check_ffmpeg_installed()
@@ -51,7 +51,7 @@ def test_check_ffmpeg_installed_missing(capsys: pytest.CaptureFixture[str]) -> N
     mock_which.assert_called_once_with("ffmpeg")
     assert result is False
 
-    captured = capsys.readouterr()
+    captured = capfd.readouterr()
     assert "ffmpeg" in captured.out
     assert "\033[91m" in captured.out
     assert "\033[0m" in captured.out

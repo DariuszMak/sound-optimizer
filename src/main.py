@@ -240,7 +240,8 @@ def check_ffmpeg_installed() -> bool:
         print(
             f"{ANSI_RED}ERROR: ffmpeg was not found on your system PATH. "
             f"Please install ffmpeg (https://ffmpeg.org/download.html) and "
-            f"ensure it is available on PATH before running this script.{ANSI_RESET}"
+            f"ensure it is available on PATH before running this script.{ANSI_RESET}",
+            flush=True,
         )
         return False
     return True
