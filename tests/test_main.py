@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
@@ -9,6 +11,7 @@ from src.main import (
     _measure_lufs,
     _peaking_biquad,
     apply_eq_for_metering,
+    check_ffmpeg_installed,
     collect_audio_files,
     dynamic_loudness_control,
     export_audio,
@@ -26,6 +29,32 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     import pytest
+
+
+def test_check_ffmpeg_installed_present(capsys: pytest.CaptureFixture[str]) -> None:
+    """Test that no warning is printed and True is returned when ffmpeg is found."""
+    with patch("src.main.shutil.which", return_value="/usr/bin/ffmpeg") as mock_which:
+        result = check_ffmpeg_installed()
+
+    mock_which.assert_called_once_with("ffmpeg")
+    assert result is True
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+
+
+def test_check_ffmpeg_installed_missing(capsys: pytest.CaptureFixture[str]) -> None:
+    """Test that a red warning is printed and False is returned when ffmpeg is missing."""
+    with patch("src.main.shutil.which", return_value=None) as mock_which:
+        result = check_ffmpeg_installed()
+
+    mock_which.assert_called_once_with("ffmpeg")
+    assert result is False
+
+    captured = capsys.readouterr()
+    assert "ffmpeg" in captured.out
+    assert "\033[91m" in captured.out
+    assert "\033[0m" in captured.out
 
 
 def test_peaking_biquad() -> None:
@@ -253,11 +282,15 @@ def test_collect_audio_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
 def test_main(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test the main entrypoint and multiprocessing pool handling."""
 
-    with patch("src.main.collect_audio_files", return_value=[]):
+    with (
+        patch("src.main.check_ffmpeg_installed", return_value=True),
+        patch("src.main.collect_audio_files", return_value=[]),
+    ):
         main()
 
     tasks = [("in.wav", "out.mp3")]
     with (
+        patch("src.main.check_ffmpeg_installed", return_value=True),
         patch("src.main.collect_audio_files", return_value=tasks),
         patch("src.main.Pool") as mock_pool,
         patch("src.main.tqdm"),
@@ -269,3 +302,17 @@ def test_main(monkeypatch: pytest.MonkeyPatch) -> None:
         main()
 
         mock_pool_instance.imap_unordered.assert_called_once()
+
+
+def test_main_missing_ffmpeg() -> None:
+    """Test that main() exits early without collecting or processing files when ffmpeg is missing."""
+    with (
+        patch("src.main.check_ffmpeg_installed", return_value=False) as mock_check,
+        patch("src.main.collect_audio_files") as mock_collect,
+        patch("src.main.Pool") as mock_pool,
+    ):
+        main()
+
+        mock_check.assert_called_once()
+        mock_collect.assert_not_called()
+        mock_pool.assert_not_called()

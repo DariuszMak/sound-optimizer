@@ -1,5 +1,6 @@
 import contextlib
 import os
+import shutil
 import warnings
 from multiprocessing import Pool, cpu_count, freeze_support
 from typing import TypeAlias, cast
@@ -23,6 +24,10 @@ SUPPORTED = (".wav", ".mp3", ".flac", ".ogg", ".m4a", ".wma", ".mpc")
 INPUT_ROOT = "."
 OUTPUT_ROOT = "processed"
 EXCLUDED_DIRS = {".venv", "processed", "__pycache__"}
+
+FFMPEG_BINARY = "ffmpeg"
+ANSI_RED = "\033[91m"
+ANSI_RESET = "\033[0m"
 
 EQ_BANDS: list[tuple[float, float]] = [
     (60.0, 20 * np.log10(1.40)),
@@ -223,6 +228,24 @@ def limiter(
     return cast("Float32Array", out.astype(np.float32))
 
 
+def check_ffmpeg_installed() -> bool:
+    """Check whether ffmpeg is available on the system PATH.
+
+    pydub relies on the ffmpeg binary being installed and discoverable on
+    the native system for decoding/encoding most audio formats (mp3, m4a,
+    wma, mpc, etc). If it is missing, print a red warning to the console
+    so the user can fix their environment before processing fails.
+    """
+    if shutil.which(FFMPEG_BINARY) is None:
+        print(
+            f"{ANSI_RED}ERROR: ffmpeg was not found on your system PATH. "
+            f"Please install ffmpeg (https://ffmpeg.org/download.html) and "
+            f"ensure it is available on PATH before running this script.{ANSI_RESET}"
+        )
+        return False
+    return True
+
+
 def load_audio(path: str) -> tuple[Float32Array | None, int | None]:
     try:
         audio = AudioSegment.from_file(path)
@@ -326,6 +349,9 @@ def collect_audio_files() -> list[tuple[str, str]]:
 
 
 def main() -> None:
+    if not check_ffmpeg_installed():
+        return
+
     tasks = collect_audio_files()
     if not tasks:
         return
