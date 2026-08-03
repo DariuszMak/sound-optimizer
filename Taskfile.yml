@@ -51,7 +51,7 @@ tasks:
     deps:
       - cleanup
     cmds:
+      - task: dev-env
       - task: local-static-tests
       - task: build-release
       - task: run-native-release
-      - powershell -Command "uv sync --dev --locked --no-cache"
