@@ -233,13 +233,6 @@ def limiter(
 
 
 def check_ffmpeg_installed() -> bool:
-    """Check whether ffmpeg is available on the system PATH.
-
-    pydub relies on the ffmpeg binary being installed and discoverable on
-    the native system for decoding/encoding most audio formats (mp3, m4a,
-    wma, mpc, etc). If it is missing, print a red warning to the console
-    so the user can fix their environment before processing fails.
-    """
     if shutil.which(FFMPEG_BINARY) is None:
         logger.error(
             "%sERROR: ffmpeg was not found on your system PATH. "
@@ -253,14 +246,6 @@ def check_ffmpeg_installed() -> bool:
 
 
 def wait_for_keypress() -> None:
-    """Block until the user presses any key.
-
-    This keeps the console window open when the script is run by
-    double-clicking (e.g. on Windows), so the user has a chance to read
-    any messages before it closes. In non-interactive environments
-    (piped input, CI, test runners) stdin is not a TTY, so this returns
-    immediately without blocking.
-    """
     if not sys.stdin.isatty():
         return
 
@@ -410,6 +395,8 @@ def main() -> None:
                     unit="file",
                 )
             )
+
+        logger.info("Processing done.")
     finally:
         wait_for_keypress()
 
