@@ -3,7 +3,7 @@
 <table align="center">
   <tr>
     <td align="center">
-        <a href="https://github.com/DariuszMak/sound-optimizer/releases/download/1.0.0/Sound_optimizer.exe">
+        <a href="https://github.com/DariuszMak/sound-optimizer/releases/download/1.0.1/Sound_optimizer.exe">
         <img src="images/drawings/Flow.png" alt="Flow" width="600">
       </a>
     </td>
