@@ -30,18 +30,18 @@
 - [Task](https://taskfile.dev/docs/installation) runner
 - [Ffmpeg](https://github.com/BtbN/FFmpeg-Builds/releases) - install via:
 
-```commandline
+```console
 winget install ffmpeg --silent --accept-package-agreements --accept-source-agreements
 ```
 
 ### Fast Windows dev
 
-```commandline
+```console
 task full-dev-native ; 
 ```
 
 ### Generate diagrams
 
-```commandline
+```console
 task generate-diagrams ; 
 ```
