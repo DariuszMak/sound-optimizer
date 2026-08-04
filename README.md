@@ -28,7 +28,11 @@
 
 - [UV](https://github.com/astral-sh/uv) package manager
 - [Task](https://taskfile.dev/docs/installation) runner
-- [Ffmpeg](https://github.com/BtbN/FFmpeg-Builds/releases)
+- [Ffmpeg](https://github.com/BtbN/FFmpeg-Builds/releases) - install via:
+
+```commandline
+winget install ffmpeg --silent --accept-package-agreements --accept-source-agreements
+```
 
 ### Fast Windows dev
 
