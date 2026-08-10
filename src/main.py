@@ -3,6 +3,7 @@ import logging
 import os
 import shutil
 import sys
+import threading
 import warnings
 from multiprocessing import Pool, Value, cpu_count, freeze_support
 from typing import Any, TypeAlias, cast
@@ -68,6 +69,35 @@ def format_loudness_params(
         f"Dry: {dry_str} | EQ: {eq_str} | Pre-Gain: {gain_str} | "
         f"Target: {target_lufs:.1f} LUFS | Peak Limit: {ceiling_db:.1f} dB"
     )
+
+
+def clear_console() -> None:
+    """Clears the console output completely."""
+    os.system("cls" if os.name == "nt" else "clear")
+
+
+class ConsoleCleaner:
+    """Runs a background thread to clear the console at regular intervals."""
+
+    def __init__(self, interval: float = 10.0) -> None:
+        self.interval = interval
+        self._stop_event = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def _run(self) -> None:
+        while not self._stop_event.is_set():
+            # Wait for the interval, but wake up immediately if stopped
+            is_stopped = self._stop_event.wait(self.interval)
+            if not is_stopped:
+                clear_console()
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop_event.set()
+        if self._thread.is_alive():
+            self._thread.join()
 
 
 def _peaking_biquad(
@@ -442,20 +472,27 @@ def main() -> None:
         if not tasks:
             return
 
-        workers = max(1, cpu_count() - 1)
-        slot_counter = Value("i", 0)
-        with Pool(workers, initializer=_init_worker, initargs=(slot_counter,)) as pool:
-            list(
-                tqdm(
-                    pool.imap_unordered(process_audio, tasks),
-                    total=len(tasks),
-                    desc="Processing audio",
-                    unit="file",
-                    position=0,
-                )
-            )
+        cleaner = ConsoleCleaner(interval=10.0)
+        cleaner.start()
 
-        logger.info("Processing done.")
+        try:
+            workers = max(1, cpu_count() - 1)
+            slot_counter = Value("i", 0)
+            with Pool(workers, initializer=_init_worker, initargs=(slot_counter,)) as pool:
+                list(
+                    tqdm(
+                        pool.imap_unordered(process_audio, tasks),
+                        total=len(tasks),
+                        desc="Processing audio",
+                        unit="file",
+                        position=0,
+                    )
+                )
+
+            logger.info("Processing done.")
+        finally:
+            cleaner.stop()
+
     finally:
         wait_for_keypress()
 

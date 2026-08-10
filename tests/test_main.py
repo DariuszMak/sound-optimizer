@@ -7,15 +7,18 @@ from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import numpy as np
+import pytest
 from pydub import AudioSegment
 
 from src import main as main_module
 from src.main import (
+    ConsoleCleaner,
     _init_worker,
     _measure_lufs,
     _peaking_biquad,
     apply_eq_for_metering,
     check_ffmpeg_installed,
+    clear_console,
     collect_audio_files,
     dynamic_loudness_control,
     export_audio,
@@ -33,7 +36,38 @@ from tests.conftest import generate_sine_wave
 if TYPE_CHECKING:
     from pathlib import Path
 
-    import pytest
+
+@pytest.fixture(autouse=True)
+def prevent_console_clear(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Prevent actual console clearing during tests."""
+    monkeypatch.setattr("src.main.os.system", MagicMock())
+
+
+def test_clear_console(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that the correct clear command is sent depending on the OS."""
+    mock_system = MagicMock()
+    monkeypatch.setattr("src.main.os.system", mock_system)
+    
+    monkeypatch.setattr("src.main.os.name", "nt")
+    clear_console()
+    mock_system.assert_called_with("cls")
+    
+    monkeypatch.setattr("src.main.os.name", "posix")
+    clear_console()
+    mock_system.assert_called_with("clear")
+
+
+def test_console_cleaner(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that the ConsoleCleaner background thread clears the console repeatedly."""
+    mock_clear = MagicMock()
+    monkeypatch.setattr("src.main.clear_console", mock_clear)
+    
+    cleaner = ConsoleCleaner(interval=0.01)
+    cleaner.start()
+    cleaner._stop_event.wait(0.05)
+    cleaner.stop()
+    
+    assert mock_clear.call_count >= 1
 
 
 def test_check_ffmpeg_installed_present(caplog: pytest.LogCaptureFixture) -> None:
