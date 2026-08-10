@@ -81,7 +81,7 @@ def clear_console() -> None:
 class ConsoleCleaner:
     """Runs a background thread to clear the console at regular intervals."""
 
-    def __init__(self, interval: float = 10.0) -> None:
+    def __init__(self, interval: float = 300.0) -> None:
         self.interval = interval
         self._stop_event = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
@@ -474,7 +474,7 @@ def main() -> None:
         if not tasks:
             return
 
-        cleaner = ConsoleCleaner(interval=10.0)
+        cleaner = ConsoleCleaner(interval=300.0)
         cleaner.start()
 
         try:
