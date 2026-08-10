@@ -44,17 +44,25 @@ def prevent_console_clear(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_clear_console(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test that the correct clear command is sent depending on the OS."""
-    mock_system = MagicMock()
-    monkeypatch.setattr("src.main.os.system", mock_system)
+    """Test that the correct clear command is sent depending on the platform."""
+    mock_run = MagicMock()
+    monkeypatch.setattr("src.main.subprocess.run", mock_run)
 
-    monkeypatch.setattr("src.main.os.name", "nt")
+    monkeypatch.setattr("src.main.sys.platform", "win32")
     clear_console()
-    mock_system.assert_called_with("cls")
+    mock_run.assert_called_once_with(
+        ["cls"],
+        check=False,
+    )
 
-    monkeypatch.setattr("src.main.os.name", "posix")
+    mock_run.reset_mock()
+
+    monkeypatch.setattr("src.main.sys.platform", "linux")
     clear_console()
-    mock_system.assert_called_with("clear")
+    mock_run.assert_called_once_with(
+        ["clear"],
+        check=False,
+    )
 
 
 def test_console_cleaner(monkeypatch: pytest.MonkeyPatch) -> None:
