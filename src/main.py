@@ -1,9 +1,8 @@
-import subprocess # noqa: S404
-import sys
 import contextlib
 import logging
 import os
 import shutil
+import subprocess  # ruff:ignore[suspicious-subprocess-import]
 import sys
 import threading
 import warnings
@@ -76,7 +75,8 @@ def format_loudness_params(
 def clear_console() -> None:
     """Clears the console output completely."""
     command = "cls" if sys.platform == "win32" else "clear"
-    subprocess.run([command], check=False) # noqa: S603
+    subprocess.run([command], check=False)  # ruff:ignore[subprocess-without-shell-equals-true]
+
 
 class ConsoleCleaner:
     """Runs a background thread to clear the console at regular intervals."""
