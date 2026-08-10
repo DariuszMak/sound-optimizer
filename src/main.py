@@ -4,8 +4,8 @@ import os
 import shutil
 import sys
 import warnings
-from multiprocessing import Pool, cpu_count, freeze_support
-from typing import TypeAlias, cast
+from multiprocessing import Pool, Value, cpu_count, freeze_support
+from typing import Any, TypeAlias, cast
 
 import numpy as np
 import pyloudnorm as pyln
@@ -43,6 +43,28 @@ EQ_BANDS: list[tuple[float, float]] = [
 EQ_Q = 1.0
 
 warnings.filterwarnings("ignore")
+
+_worker_slot: int | None = None
+
+
+def _init_worker(counter: Any) -> None:
+    global _worker_slot
+    with counter.get_lock():
+        _worker_slot = counter.value
+        counter.value += 1
+
+
+def format_loudness_params(
+    lufs_dry: float | None,
+    lufs_eq: float | None,
+    gain_db: float | None,
+    target_lufs: float = TARGET_LUFS,
+    ceiling_db: float = TRUE_PEAK_CEILING_DB,
+) -> str:
+    dry_str = f"{lufs_dry:.1f} LUFS" if lufs_dry is not None else "N/A"
+    eq_str = f"{lufs_eq:.1f} LUFS" if lufs_eq is not None else "N/A"
+    gain_str = f"{gain_db:+.1f} dB" if gain_db is not None else "0.0 dB"
+    return f"Dry: {dry_str} | EQ: {eq_str} | Pre-Gain: {gain_str} | Target: {target_lufs:.1f} LUFS | Peak Limit: {ceiling_db:.1f} dB"
 
 
 def _peaking_biquad(
@@ -315,18 +337,39 @@ def process_audio(task: tuple[str, str]) -> None:
     if os.path.exists(output_path):
         return
 
+    worker_id = _worker_slot if _worker_slot is not None else 0
+    file_name = os.path.basename(input_path)
+    position = worker_id + 1
+
+    pbar = tqdm(
+        total=7,
+        desc=f"W{worker_id:02d} [{file_name[:15]}] Loading",
+        position=position,
+        leave=False,
+        unit="step",
+    )
+
     y, sr = load_audio(input_path)
     if y is None or sr is None or len(y) == 0:
+        pbar.close()
         return
+    pbar.update(1)
 
+    pbar.set_description(f"W{worker_id:02d} [{file_name[:15]}] Trim Silence")
     y = trim_silence_multi(y, TRIM_THRESHOLD_DB)
     if len(y) == 0:
+        pbar.close()
         return
+    pbar.update(1)
 
+    pbar.set_description(f"W{worker_id:02d} [{file_name[:15]}] Remove Silences")
     y = remove_long_silences_multi(y, sr)
     if len(y) == 0:
+        pbar.close()
         return
+    pbar.update(1)
 
+    pbar.set_description(f"W{worker_id:02d} [{file_name[:15]}] Metering LUFS")
     mono_dry = y.mean(axis=1).astype(np.float32) if y.ndim > 1 else y.copy()
 
     mono_eq = apply_eq_for_metering(mono_dry, sr)
@@ -340,14 +383,21 @@ def process_audio(task: tuple[str, str]) -> None:
     else:
         target_for_dry = TARGET_LUFS
 
+    gain_db: float | None = None
     if lufs_dry is not None:
         gain_db = float(np.clip(target_for_dry - lufs_dry, -MAX_PRE_GAIN_DB, MAX_PRE_GAIN_DB))
         gain_lin = 10 ** (gain_db / 20.0)
         y = (y * gain_lin).astype(np.float32)
         mono_dry = (mono_dry * gain_lin).astype(np.float32)
 
-    y = dynamic_loudness_control(y, sr, TARGET_LUFS)
+    pbar.set_postfix_str(format_loudness_params(lufs_dry, lufs_eq, gain_db))
+    pbar.update(1)
 
+    pbar.set_description(f"W{worker_id:02d} [{file_name[:15]}] Dynamic Loudness")
+    y = dynamic_loudness_control(y, sr, TARGET_LUFS)
+    pbar.update(1)
+
+    pbar.set_description(f"W{worker_id:02d} [{file_name[:15]}] Peak Limiter")
     if y.ndim > 1:
         y = np.stack(
             [limiter(y[:, c], sr, TRUE_PEAK_CEILING_DB) for c in range(y.shape[1])],
@@ -355,9 +405,13 @@ def process_audio(task: tuple[str, str]) -> None:
         ).astype(np.float32)
     else:
         y = limiter(y, sr, TRUE_PEAK_CEILING_DB)
+    pbar.update(1)
 
+    pbar.set_description(f"W{worker_id:02d} [{file_name[:15]}] Exporting Audio")
     with contextlib.suppress(Exception):
         export_audio(y.astype(np.float32), sr, output_path)
+    pbar.update(1)
+    pbar.close()
 
 
 def collect_audio_files() -> list[tuple[str, str]]:
@@ -386,13 +440,15 @@ def main() -> None:
             return
 
         workers = max(1, cpu_count() // 2)
-        with Pool(workers) as pool:
+        slot_counter = Value("i", 0)
+        with Pool(workers, initializer=_init_worker, initargs=(slot_counter,)) as pool:
             list(
                 tqdm(
                     pool.imap_unordered(process_audio, tasks),
                     total=len(tasks),
                     desc="Processing audio",
                     unit="file",
+                    position=0,
                 )
             )
 

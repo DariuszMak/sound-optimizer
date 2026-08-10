@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import multiprocessing
 import os
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
@@ -8,7 +9,9 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 from pydub import AudioSegment
 
+from src import main as main_module
 from src.main import (
+    _init_worker,
     _measure_lufs,
     _peaking_biquad,
     apply_eq_for_metering,
@@ -16,6 +19,7 @@ from src.main import (
     collect_audio_files,
     dynamic_loudness_control,
     export_audio,
+    format_loudness_params,
     limiter,
     load_audio,
     main,
@@ -338,8 +342,6 @@ def test_wait_for_keypress_non_interactive() -> None:
         patch("src.main.sys.stdin.isatty", return_value=False),
         patch("src.main.os.name", "nt"),
     ):
-        import src.main as main_module
-
         main_module.wait_for_keypress()  # should return immediately, no hang
 
 
@@ -356,8 +358,6 @@ def test_wait_for_keypress_windows(monkeypatch: pytest.MonkeyPatch) -> None:
         patch("src.main.sys.stdin.isatty", return_value=True),
         patch("src.main.os.name", "nt"),
     ):
-        import src.main as main_module
-
         main_module.wait_for_keypress()
 
     mock_msvcrt.getch.assert_called_once()
@@ -385,10 +385,61 @@ def test_wait_for_keypress_posix(monkeypatch: pytest.MonkeyPatch) -> None:
         patch("src.main.sys.stdin.read", return_value="x") as mock_read,
         patch("src.main.os.name", "posix"),
     ):
-        import src.main as main_module
-
         main_module.wait_for_keypress()
 
     mock_tty.setraw.assert_called_once_with(0)
     mock_read.assert_called_once_with(1)
     mock_termios.tcsetattr.assert_called_once_with(0, 1, ["old_settings"])
+
+
+def test_format_loudness_params() -> None:
+    """Test formatting of sound loudness parameters for console output."""
+    formatted = format_loudness_params(lufs_dry=-20.5, lufs_eq=-18.2, gain_db=4.5)
+    assert "Dry: -20.5 LUFS" in formatted
+    assert "EQ: -18.2 LUFS" in formatted
+    assert "Pre-Gain: +4.5 dB" in formatted
+    assert "Target: -16.0 LUFS" in formatted
+    assert "Peak Limit: -1.0 dB" in formatted
+
+    formatted_none = format_loudness_params(lufs_dry=None, lufs_eq=None, gain_db=None)
+    assert "Dry: N/A" in formatted_none
+    assert "EQ: N/A" in formatted_none
+    assert "Pre-Gain: 0.0 dB" in formatted_none
+
+
+def test_init_worker() -> None:
+    """Test worker slot initialization for multiprocessing."""
+    counter = multiprocessing.Value("i", 0)
+
+    _init_worker(counter)
+    assert main_module._worker_slot == 0
+    assert counter.value == 1
+
+    _init_worker(counter)
+    assert main_module._worker_slot == 1
+    assert counter.value == 2
+
+
+def test_process_audio_visualization(tmp_path: Path, sample_rate: int) -> None:
+    """Test process_audio progress bar visualization updates and loudness parameters display."""
+    sine = generate_sine_wave(duration_sec=2.0, sr=sample_rate, amp=0.5)
+    sine_int16 = (sine * 32767).astype(np.int16)
+    segment = AudioSegment(sine_int16.tobytes(), frame_rate=sample_rate, sample_width=2, channels=1)
+
+    input_wav = str(tmp_path / "test_vis_input.wav")
+    output_mp3 = str(tmp_path / "test_vis_output.mp3")
+    segment.export(input_wav, format="wav")
+
+    with patch("src.main.tqdm") as mock_tqdm:
+        mock_pbar = MagicMock()
+        mock_tqdm.return_value = mock_pbar
+
+        process_audio((input_wav, output_mp3))
+
+        mock_tqdm.assert_called_once()
+        assert mock_pbar.update.call_count == 7
+        mock_pbar.set_postfix_str.assert_called_once()
+        postfix_arg = mock_pbar.set_postfix_str.call_args[0][0]
+        assert "Dry:" in postfix_arg
+        assert "Pre-Gain:" in postfix_arg
+        mock_pbar.close.assert_called_once()
