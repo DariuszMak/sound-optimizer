@@ -345,7 +345,7 @@ def process_audio(task: tuple[str, str]) -> None:
     position = worker_id + 1
 
     pbar = tqdm(
-        total=7,
+        total=6,
         desc=f"W{worker_id:02d} [{file_name[:15]}] Loading",
         position=position,
         leave=False,
