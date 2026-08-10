@@ -439,7 +439,7 @@ def main() -> None:
         if not tasks:
             return
 
-        workers = max(1, cpu_count() // 2)
+        workers = max(1, cpu_count() // 1)
         slot_counter = Value("i", 0)
         with Pool(workers, initializer=_init_worker, initargs=(slot_counter,)) as pool:
             list(
