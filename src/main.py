@@ -1,3 +1,5 @@
+import subprocess
+import sys
 import contextlib
 import logging
 import os
@@ -10,7 +12,6 @@ from typing import Any, TypeAlias, cast
 
 import numpy as np
 import pyloudnorm as pyln
-from colorama import just_fix_windows_console
 from numpy.typing import NDArray
 from pydub import AudioSegment
 from scipy.signal import lfilter
@@ -74,8 +75,8 @@ def format_loudness_params(
 
 def clear_console() -> None:
     """Clears the console output completely."""
-    just_fix_windows_console()
-
+    command = "cls" if sys.platform == "win32" else "clear"
+    subprocess.run([command], check=False)
 
 class ConsoleCleaner:
     """Runs a background thread to clear the console at regular intervals."""
