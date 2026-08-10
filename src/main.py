@@ -1,4 +1,4 @@
-import subprocess
+import subprocess # noqa: S404
 import sys
 import contextlib
 import logging
@@ -76,7 +76,7 @@ def format_loudness_params(
 def clear_console() -> None:
     """Clears the console output completely."""
     command = "cls" if sys.platform == "win32" else "clear"
-    subprocess.run([command], check=False)
+    subprocess.run([command], check=False) # noqa: S603
 
 class ConsoleCleaner:
     """Runs a background thread to clear the console at regular intervals."""
