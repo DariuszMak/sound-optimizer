@@ -43,13 +43,18 @@ def prevent_console_clear(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("src.main.os.system", MagicMock())
 
 
-def test_clear_console(capsys: pytest.CaptureFixture[str]) -> None:
-    """Test that clear_console emits the ANSI escape sequence."""
+def test_clear_console(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that the correct clear command is sent depending on the OS."""
+    mock_system = MagicMock()
+    monkeypatch.setattr("src.main.os.system", mock_system)
+
+    monkeypatch.setattr("src.main.os.name", "nt")
     clear_console()
+    mock_system.assert_called_with("cls")
 
-    captured = capsys.readouterr()
-
-    assert captured.out == ""
+    monkeypatch.setattr("src.main.os.name", "posix")
+    clear_console()
+    mock_system.assert_called_with("clear")
 
 
 def test_console_cleaner(monkeypatch: pytest.MonkeyPatch) -> None:
