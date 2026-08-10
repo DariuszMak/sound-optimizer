@@ -1,3 +1,5 @@
+import subprocess
+import sys
 import contextlib
 import logging
 import os
@@ -73,8 +75,8 @@ def format_loudness_params(
 
 def clear_console() -> None:
     """Clears the console output completely."""
-    os.system("cls" if os.name == "nt" else "clear")
-
+    command = "cls" if sys.platform == "win32" else "clear"
+    subprocess.run([command], check=False)
 
 class ConsoleCleaner:
     """Runs a background thread to clear the console at regular intervals."""

@@ -47,11 +47,11 @@ def test_clear_console(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that the correct clear command is sent depending on the OS."""
     mock_system = MagicMock()
     monkeypatch.setattr("src.main.os.system", mock_system)
-    
+
     monkeypatch.setattr("src.main.os.name", "nt")
     clear_console()
     mock_system.assert_called_with("cls")
-    
+
     monkeypatch.setattr("src.main.os.name", "posix")
     clear_console()
     mock_system.assert_called_with("clear")
@@ -61,12 +61,12 @@ def test_console_cleaner(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that the ConsoleCleaner background thread clears the console repeatedly."""
     mock_clear = MagicMock()
     monkeypatch.setattr("src.main.clear_console", mock_clear)
-    
+
     cleaner = ConsoleCleaner(interval=0.01)
     cleaner.start()
     cleaner._stop_event.wait(0.05)
     cleaner.stop()
-    
+
     assert mock_clear.call_count >= 1
 
 
