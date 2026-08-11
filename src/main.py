@@ -410,7 +410,6 @@ def process_audio(task: tuple[str, str]) -> None:
     pbar.set_description(f"W{worker_id:02d} [{file_name[:15]}] Exporting Audio")
     with contextlib.suppress(Exception):
         export_audio(y.astype(np.float32), sr, output_path)
-    pbar.update(1)
     pbar.close()
 
 
