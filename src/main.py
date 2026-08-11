@@ -58,15 +58,11 @@ def format_loudness_params(
     lufs_dry: float | None,
     lufs_eq: float | None,
     gain_db: float | None,
-    target_lufs: float = TARGET_LUFS,
-    ceiling_db: float = TRUE_PEAK_CEILING_DB,
 ) -> str:
     dry_str = f"{lufs_dry:.1f} LUFS" if lufs_dry is not None else "N/A"
     eq_str = f"{lufs_eq:.1f} LUFS" if lufs_eq is not None else "N/A"
     gain_str = f"{gain_db:+.1f} dB" if gain_db is not None else "0.0 dB"
-    return (
-        f"Dry: {dry_str} | EQ: {eq_str} | Pre-Gain: {gain_str}"
-    )
+    return f"Dry: {dry_str} | EQ: {eq_str} | Pre-Gain: {gain_str}"
 
 
 def _peaking_biquad(
