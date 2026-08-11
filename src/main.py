@@ -350,6 +350,7 @@ def process_audio(task: tuple[str, str]) -> None:
         position=position,
         leave=False,
         unit="step",
+        dynamic_ncols=True,
     )
 
     y, sr = load_audio(input_path)
@@ -452,6 +453,7 @@ def main() -> None:
                     desc="Processing audio",
                     unit="file",
                     position=0,
+                    dynamic_ncols=True,
                 )
             )
 

@@ -307,17 +307,21 @@ def test_main(monkeypatch: pytest.MonkeyPatch) -> None:
         patch("src.main.check_ffmpeg_installed", return_value=True),
         patch("src.main.collect_audio_files", return_value=tasks),
         patch("src.main.Pool") as mock_pool,
-        patch("src.main.tqdm"),
+        patch("src.main.tqdm") as mock_tqdm,
         patch("src.main.wait_for_keypress") as mock_wait,
     ):
         mock_pool_instance = MagicMock()
         mock_pool.return_value.__enter__.return_value = mock_pool_instance
         mock_pool_instance.imap_unordered.return_value = iter([None])
+        mock_tqdm.return_value = iter([None])
 
         main()
 
         mock_pool_instance.imap_unordered.assert_called_once()
         mock_wait.assert_called_once()
+
+        mock_tqdm.assert_called_once()
+        assert mock_tqdm.call_args.kwargs["dynamic_ncols"] is True
 
 
 def test_main_missing_ffmpeg() -> None:
@@ -437,6 +441,7 @@ def test_process_audio_visualization(tmp_path: Path, sample_rate: int) -> None:
         process_audio((input_wav, output_mp3))
 
         mock_tqdm.assert_called_once()
+        assert mock_tqdm.call_args.kwargs["dynamic_ncols"] is True
         assert mock_pbar.update.call_count == 7
         mock_pbar.set_postfix_str.assert_called_once()
         postfix_arg = mock_pbar.set_postfix_str.call_args[0][0]
