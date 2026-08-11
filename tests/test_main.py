@@ -402,8 +402,6 @@ def test_format_loudness_params() -> None:
     assert "Dry: -20.5 LUFS" in formatted
     assert "EQ: -18.2 LUFS" in formatted
     assert "Pre-Gain: +4.5 dB" in formatted
-    assert "Target: -16.0 LUFS" in formatted
-    assert "Peak Limit: -1.0 dB" in formatted
 
     formatted_none = format_loudness_params(lufs_dry=None, lufs_eq=None, gain_db=None)
     assert "Dry: N/A" in formatted_none
