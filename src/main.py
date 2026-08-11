@@ -65,8 +65,7 @@ def format_loudness_params(
     eq_str = f"{lufs_eq:.1f} LUFS" if lufs_eq is not None else "N/A"
     gain_str = f"{gain_db:+.1f} dB" if gain_db is not None else "0.0 dB"
     return (
-        f"Dry: {dry_str} | EQ: {eq_str} | Pre-Gain: {gain_str} | "
-        f"Target: {target_lufs:.1f} LUFS | Peak Limit: {ceiling_db:.1f} dB"
+        f"Dry: {dry_str} | EQ: {eq_str} | Pre-Gain: {gain_str}"
     )
 
 
