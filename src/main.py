@@ -347,7 +347,6 @@ def process_audio(task: tuple[str, str]) -> None:
         unit="step",
         dynamic_ncols=True,
     )
-
     pbar.update(1)
 
     y, sr = load_audio(input_path)
