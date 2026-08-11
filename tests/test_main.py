@@ -11,6 +11,7 @@ from pydub import AudioSegment
 
 from src import main as main_module
 from src.main import (
+    NUMBER_OF_STEPS,
     _init_worker,
     _measure_lufs,
     _peaking_biquad,
@@ -440,7 +441,7 @@ def test_process_audio_visualization(tmp_path: Path, sample_rate: int) -> None:
 
         mock_tqdm.assert_called_once()
         assert mock_tqdm.call_args.kwargs["dynamic_ncols"] is True
-        assert mock_pbar.update.call_count == 7
+        assert mock_pbar.update.call_count == NUMBER_OF_STEPS
         mock_pbar.set_postfix_str.assert_called_once()
         postfix_arg = mock_pbar.set_postfix_str.call_args[0][0]
         assert "Dry:" in postfix_arg

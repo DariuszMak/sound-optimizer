@@ -27,6 +27,8 @@ INPUT_ROOT = "."
 OUTPUT_ROOT = "processed"
 EXCLUDED_DIRS = {".venv", "processed", "__pycache__"}
 
+NUMBER_OF_STEPS = 7
+
 FFMPEG_BINARY = "ffmpeg"
 ANSI_RED = "\033[91m"
 ANSI_RESET = "\033[0m"
@@ -340,7 +342,7 @@ def process_audio(task: tuple[str, str]) -> None:
     position = worker_id + 1
 
     pbar = tqdm(
-        total=7,
+        total=NUMBER_OF_STEPS,
         desc=f"W{worker_id:02d} [{file_name[:15]}] Loading",
         position=position,
         leave=False,
