@@ -557,7 +557,7 @@ def test_limiter_edge_cases(sample_rate: int) -> None:
 def test_export_audio_edge_cases(tmp_path: Path, sample_rate: int) -> None:
     y_mono = generate_sine_wave(duration_sec=0.1, sr=sample_rate)
     y_stereo = np.column_stack((y_mono, y_mono))
-    y_clip = y_mono * 5.0
+    y_clip = (y_mono * 5.0).astype(np.float32)
 
     wav_path = str(tmp_path / "out.wav")
     flac_path = str(tmp_path / "out.flac")
