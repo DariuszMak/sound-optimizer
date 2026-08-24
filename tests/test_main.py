@@ -363,7 +363,7 @@ def test_wait_for_keypress_windows(monkeypatch: pytest.MonkeyPatch) -> None:
     import types
 
     mock_msvcrt = types.ModuleType("msvcrt")
-    mock_msvcrt.getch = MagicMock(return_value=b"x")
+    mock_msvcrt.getch = MagicMock(return_value=b"x")   # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "msvcrt", mock_msvcrt)
 
     with (
@@ -381,12 +381,12 @@ def test_wait_for_keypress_posix(monkeypatch: pytest.MonkeyPatch) -> None:
     import types
 
     mock_termios = types.ModuleType("termios")
-    mock_termios.tcgetattr = MagicMock(return_value=["old_settings"])
-    mock_termios.tcsetattr = MagicMock()
-    mock_termios.TCSADRAIN = 1
+    mock_termios.tcgetattr = MagicMock(return_value=["old_settings"])  # type: ignore[attr-defined]
+    mock_termios.tcsetattr = MagicMock()  # type: ignore[attr-defined]
+    mock_termios.TCSADRAIN = 1   # type: ignore[attr-defined]
 
     mock_tty = types.ModuleType("tty")
-    mock_tty.setraw = MagicMock()
+    mock_tty.setraw = MagicMock()  # type: ignore[attr-defined]
 
     monkeypatch.setitem(sys.modules, "termios", mock_termios)
     monkeypatch.setitem(sys.modules, "tty", mock_tty)
