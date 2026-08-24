@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import numpy as np
+import pytest
 from pydub import AudioSegment
 
 from src import main as main_module
@@ -40,8 +41,6 @@ from tests.conftest import generate_sine_wave
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    import pytest
 
 
 def test_check_ffmpeg_installed_present(caplog: pytest.LogCaptureFixture) -> None:
@@ -363,7 +362,7 @@ def test_wait_for_keypress_windows(monkeypatch: pytest.MonkeyPatch) -> None:
     import types
 
     mock_msvcrt = types.ModuleType("msvcrt")
-    mock_msvcrt.getch = MagicMock(return_value=b"x")   # type: ignore[attr-defined]
+    mock_msvcrt.getch = MagicMock(return_value=b"x")  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "msvcrt", mock_msvcrt)
 
     with (
@@ -383,7 +382,7 @@ def test_wait_for_keypress_posix(monkeypatch: pytest.MonkeyPatch) -> None:
     mock_termios = types.ModuleType("termios")
     mock_termios.tcgetattr = MagicMock(return_value=["old_settings"])  # type: ignore[attr-defined]
     mock_termios.tcsetattr = MagicMock()  # type: ignore[attr-defined]
-    mock_termios.TCSADRAIN = 1   # type: ignore[attr-defined]
+    mock_termios.TCSADRAIN = 1  # type: ignore[attr-defined]
 
     mock_tty = types.ModuleType("tty")
     mock_tty.setraw = MagicMock()  # type: ignore[attr-defined]
@@ -464,11 +463,11 @@ def test_constants() -> None:
         (3600.0, 20 * np.log10(0.90)),
         (14000.0, 20 * np.log10(1.10)),
     ] == EQ_BANDS
-    assert EQ_Q == pytest.approx(1.0)
-    assert TARGET_LUFS == pytest.approx(-16.0)
-    assert TRIM_THRESHOLD_DB == pytest.approx(45.0)
-    assert MAX_PRE_GAIN_DB == pytest.approx(30.0)
-    assert TRUE_PEAK_CEILING_DB == pytest.approx(-1.0)
+    assert pytest.approx(1.0) == EQ_Q
+    assert pytest.approx(-16.0) == TARGET_LUFS
+    assert pytest.approx(45.0) == TRIM_THRESHOLD_DB
+    assert pytest.approx(30.0) == MAX_PRE_GAIN_DB
+    assert pytest.approx(-1.0) == TRUE_PEAK_CEILING_DB
     assert SUPPORTED == (".wav", ".mp3", ".flac", ".ogg", ".m4a", ".wma", ".mpc")
 
 
