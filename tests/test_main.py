@@ -363,7 +363,7 @@ def test_wait_for_keypress_windows(monkeypatch: pytest.MonkeyPatch) -> None:
     import types
 
     mock_msvcrt = types.ModuleType("msvcrt")
-    mock_msvcrt.getch = MagicMock(return_value=b"x")  # type: ignore[attr-defined]
+    mock_msvcrt.getch = MagicMock(return_value=b"x")
     monkeypatch.setitem(sys.modules, "msvcrt", mock_msvcrt)
 
     with (
@@ -381,12 +381,12 @@ def test_wait_for_keypress_posix(monkeypatch: pytest.MonkeyPatch) -> None:
     import types
 
     mock_termios = types.ModuleType("termios")
-    mock_termios.tcgetattr = MagicMock(return_value=["old_settings"])  # type: ignore[attr-defined]
-    mock_termios.tcsetattr = MagicMock()  # type: ignore[attr-defined]
-    mock_termios.TCSADRAIN = 1  # type: ignore[attr-defined]
+    mock_termios.tcgetattr = MagicMock(return_value=["old_settings"])
+    mock_termios.tcsetattr = MagicMock()
+    mock_termios.TCSADRAIN = 1
 
     mock_tty = types.ModuleType("tty")
-    mock_tty.setraw = MagicMock()  # type: ignore[attr-defined]
+    mock_tty.setraw = MagicMock()
 
     monkeypatch.setitem(sys.modules, "termios", mock_termios)
     monkeypatch.setitem(sys.modules, "tty", mock_tty)
@@ -457,13 +457,13 @@ def test_process_audio_visualization(tmp_path: Path, sample_rate: int) -> None:
 
 
 def test_constants() -> None:
-    assert [
+    assert EQ_BANDS == [
         (60.0, 20 * np.log10(1.40)),
         (230.0, 20 * np.log10(1.20)),
         (910.0, 20 * np.log10(0.60)),
         (3600.0, 20 * np.log10(0.90)),
         (14000.0, 20 * np.log10(1.10)),
-    ] == EQ_BANDS
+    ]
     assert EQ_Q == 1.0
     assert TARGET_LUFS == -16.0
     assert TRIM_THRESHOLD_DB == 45.0
@@ -510,18 +510,18 @@ def test_remove_long_silences_multi_edge_cases(sample_rate: int) -> None:
     min_silence_len = int(sample_rate * 2.0)
     fade_len = int(sample_rate * 0.05)
 
-    y_exact = np.full(min_silence_len, threshold * 0.9, dtype=np.float32)
+    y_exact = np.full((min_silence_len, 1), threshold * 0.9, dtype=np.float32)
     out_exact = remove_long_silences_multi(y_exact, sample_rate, silence_db=45.0, min_silence_sec=2.0)
     assert len(out_exact) == 0
 
-    y_adj = np.concatenate([y_exact, y_exact])
+    y_adj = np.concatenate([y_exact, y_exact], axis=0)
     out_adj = remove_long_silences_multi(y_adj, sample_rate, silence_db=45.0, min_silence_sec=2.0)
     assert len(out_adj) == 0
 
-    y_fade = np.concatenate([np.full(fade_len * 3, threshold * 2.0, dtype=np.float32), y_exact])
+    y_fade = np.concatenate([np.full((fade_len * 3, 1), threshold * 2.0, dtype=np.float32), y_exact], axis=0)
     out_fade = remove_long_silences_multi(y_fade, sample_rate, silence_db=45.0, min_silence_sec=2.0, fade_sec=0.05)
     assert len(out_fade) == fade_len * 3
-    assert out_fade[0] == 0.0
+    assert out_fade[0, 0] == 0.0
 
 
 def test_smooth_gain_edge_cases(sample_rate: int) -> None:
@@ -640,9 +640,9 @@ def test_collect_audio_files_edge_cases(tmp_path: Path, monkeypatch: pytest.Monk
 
 
 def test_format_loudness_params_edge_cases() -> None:
-    assert format_loudness_params(None, -10.0, None) == "Dry: N/A | EQ: -10.0 LUFS | Pre-Gain: 0.0 dB"
-    assert format_loudness_params(-15.0, None, 5.0) == "Dry: -15.0 LUFS | EQ: N/A | Pre-Gain: +5.0 dB"
-    assert format_loudness_params(None, None, None) == "Dry: N/A | EQ: N/A | Pre-Gain: 0.0 dB"
+    assert "Dry: N/A | EQ: -10.0 LUFS | Pre-Gain: 0.0 dB" == format_loudness_params(None, -10.0, None)
+    assert "Dry: -15.0 LUFS | EQ: N/A | Pre-Gain: +5.0 dB" == format_loudness_params(-15.0, None, 5.0)
+    assert "Dry: N/A | EQ: N/A | Pre-Gain: 0.0 dB" == format_loudness_params(None, None, None)
 
 
 def test_measure_lufs_edge_cases(sample_rate: int) -> None:
