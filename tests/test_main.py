@@ -464,11 +464,11 @@ def test_constants() -> None:
         (3600.0, 20 * np.log10(0.90)),
         (14000.0, 20 * np.log10(1.10)),
     ] == EQ_BANDS
-    assert EQ_Q == 1.0
-    assert TARGET_LUFS == -16.0
-    assert TRIM_THRESHOLD_DB == 45.0
-    assert MAX_PRE_GAIN_DB == 30.0
-    assert TRUE_PEAK_CEILING_DB == -1.0
+    assert EQ_Q == pytest.approx(1.0)
+    assert TARGET_LUFS == pytest.approx(-16.0)
+    assert TRIM_THRESHOLD_DB == pytest.approx(45.0)
+    assert MAX_PRE_GAIN_DB == pytest.approx(30.0)
+    assert TRUE_PEAK_CEILING_DB == pytest.approx(-1.0)
     assert SUPPORTED == (".wav", ".mp3", ".flac", ".ogg", ".m4a", ".wma", ".mpc")
 
 
@@ -521,7 +521,7 @@ def test_remove_long_silences_multi_edge_cases(sample_rate: int) -> None:
     y_fade = np.concatenate([np.full((fade_len * 3, 1), threshold * 2.0, dtype=np.float32), y_exact], axis=0)
     out_fade = remove_long_silences_multi(y_fade, sample_rate, silence_db=45.0, min_silence_sec=2.0, fade_sec=0.05)
     assert len(out_fade) == fade_len * 3
-    assert out_fade[0, 0] == 0.0
+    assert out_fade[0, 0] == pytest.approx(0.0)
 
 
 def test_smooth_gain_edge_cases(sample_rate: int) -> None:
@@ -535,7 +535,7 @@ def test_smooth_gain_edge_cases(sample_rate: int) -> None:
 
     gain_single = np.array([5.0], dtype=np.float32)
     out_single = smooth_gain(gain_single, sample_rate)
-    assert out_single[0] == 5.0
+    assert out_single[0] == pytest.approx(5.0)
 
 
 def test_limiter_edge_cases(sample_rate: int) -> None:
