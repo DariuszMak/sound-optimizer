@@ -457,13 +457,13 @@ def test_process_audio_visualization(tmp_path: Path, sample_rate: int) -> None:
 
 
 def test_constants() -> None:
-    assert EQ_BANDS == [
+    assert [
         (60.0, 20 * np.log10(1.40)),
         (230.0, 20 * np.log10(1.20)),
         (910.0, 20 * np.log10(0.60)),
         (3600.0, 20 * np.log10(0.90)),
         (14000.0, 20 * np.log10(1.10)),
-    ]
+    ] == EQ_BANDS
     assert EQ_Q == 1.0
     assert TARGET_LUFS == -16.0
     assert TRIM_THRESHOLD_DB == 45.0
@@ -640,9 +640,9 @@ def test_collect_audio_files_edge_cases(tmp_path: Path, monkeypatch: pytest.Monk
 
 
 def test_format_loudness_params_edge_cases() -> None:
-    assert "Dry: N/A | EQ: -10.0 LUFS | Pre-Gain: 0.0 dB" == format_loudness_params(None, -10.0, None)
-    assert "Dry: -15.0 LUFS | EQ: N/A | Pre-Gain: +5.0 dB" == format_loudness_params(-15.0, None, 5.0)
-    assert "Dry: N/A | EQ: N/A | Pre-Gain: 0.0 dB" == format_loudness_params(None, None, None)
+    assert format_loudness_params(None, -10.0, None) == "Dry: N/A | EQ: -10.0 LUFS | Pre-Gain: 0.0 dB"
+    assert format_loudness_params(-15.0, None, 5.0) == "Dry: -15.0 LUFS | EQ: N/A | Pre-Gain: +5.0 dB"
+    assert format_loudness_params(None, None, None) == "Dry: N/A | EQ: N/A | Pre-Gain: 0.0 dB"
 
 
 def test_measure_lufs_edge_cases(sample_rate: int) -> None:
