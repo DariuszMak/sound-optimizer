@@ -25,6 +25,11 @@ tasks:
     cmds:
       - powershell -ExecutionPolicy Bypass -File tasks/generate_diagrams.ps1
 
+  local-dev-native-profile:
+    desc: Local dev Windows profiling run
+    cmds:
+      - powershell -ExecutionPolicy Bypass -File tasks/profile_dev_application.ps1
+
 
   full-dev-native:
     desc: Fast native Windows development flow
