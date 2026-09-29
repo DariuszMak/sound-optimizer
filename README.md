@@ -34,7 +34,7 @@
 winget install ffmpeg --silent --accept-package-agreements --accept-source-agreements ; 
 ```
 
-### Fast Windows dev
+### Local development with profiler
 
 ```console
 clear ; task local-static-tests ; task local-dev-native-profile ; # task full-dev-native ; 
