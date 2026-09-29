@@ -31,13 +31,13 @@
 - [Ffmpeg](https://github.com/BtbN/FFmpeg-Builds/releases) - install via:
 
 ```console
-winget install ffmpeg --silent --accept-package-agreements --accept-source-agreements
+winget install ffmpeg --silent --accept-package-agreements --accept-source-agreements ; 
 ```
 
 ### Fast Windows dev
 
 ```console
-task full-dev-native ; 
+clear ; task local-static-tests ; task local-dev-native-profile ; # task full-dev-native ; 
 ```
 
 ### Generate diagrams
