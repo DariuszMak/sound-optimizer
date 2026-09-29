@@ -25,6 +25,7 @@ dev = [
     "vulture>=2.16",
     "semgrep>=1.90.0",
     "pyinstaller>=6.21.0",
+    "scalene>=2.3.0",
 ]
 
 [tool.mypy]
