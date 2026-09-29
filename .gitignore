@@ -159,3 +159,7 @@ files_rc.py
 
 # Project folders
 processed
+
+# Scalene profiler
+scalene-profile.json
+scalene-profile.html
