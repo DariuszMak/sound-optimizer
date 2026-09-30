@@ -10,8 +10,8 @@ import numpy as np
 import pytest
 from pydub import AudioSegment
 
-from src import main as main_module
-from src.main import (
+import main as main_module
+from main import (
     EQ_BANDS,
     EQ_Q,
     MAX_PRE_GAIN_DB,
@@ -46,8 +46,8 @@ if TYPE_CHECKING:
 def test_check_ffmpeg_installed_present(caplog: pytest.LogCaptureFixture) -> None:
     """Test that no warning is logged and True is returned when ffmpeg is found."""
     with (
-        patch("src.main.shutil.which", return_value="/usr/bin/ffmpeg") as mock_which,
-        caplog.at_level(logging.ERROR, logger="src.main"),
+        patch("main.shutil.which", return_value="/usr/bin/ffmpeg") as mock_which,
+        caplog.at_level(logging.ERROR, logger="main"),
     ):
         result = check_ffmpeg_installed()
 
@@ -59,8 +59,8 @@ def test_check_ffmpeg_installed_present(caplog: pytest.LogCaptureFixture) -> Non
 def test_check_ffmpeg_installed_missing(caplog: pytest.LogCaptureFixture) -> None:
     """Test that a red error is logged and False is returned when ffmpeg is missing."""
     with (
-        patch("src.main.shutil.which", return_value=None) as mock_which,
-        caplog.at_level(logging.ERROR, logger="src.main"),
+        patch("main.shutil.which", return_value=None) as mock_which,
+        caplog.at_level(logging.ERROR, logger="main"),
     ):
         result = check_ffmpeg_installed()
 
@@ -287,9 +287,9 @@ def test_collect_audio_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     excluded_dir.mkdir()
     (excluded_dir / "skipped.wav").touch()
 
-    monkeypatch.setattr("src.main.INPUT_ROOT", str(input_dir))
-    monkeypatch.setattr("src.main.OUTPUT_ROOT", str(output_dir))
-    monkeypatch.setattr("src.main.EXCLUDED_DIRS", {"processed"})
+    monkeypatch.setattr("main.INPUT_ROOT", str(input_dir))
+    monkeypatch.setattr("main.OUTPUT_ROOT", str(output_dir))
+    monkeypatch.setattr("main.EXCLUDED_DIRS", {"processed"})
 
     tasks = collect_audio_files()
     assert len(tasks) == 2
@@ -301,9 +301,9 @@ def test_main(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test the main entrypoint and multiprocessing pool handling."""
 
     with (
-        patch("src.main.check_ffmpeg_installed", return_value=True),
-        patch("src.main.collect_audio_files", return_value=[]),
-        patch("src.main.wait_for_keypress") as mock_wait_empty,
+        patch("main.check_ffmpeg_installed", return_value=True),
+        patch("main.collect_audio_files", return_value=[]),
+        patch("main.wait_for_keypress") as mock_wait_empty,
     ):
         main()
 
@@ -311,11 +311,11 @@ def test_main(monkeypatch: pytest.MonkeyPatch) -> None:
 
     tasks = [("in.wav", "out.mp3")]
     with (
-        patch("src.main.check_ffmpeg_installed", return_value=True),
-        patch("src.main.collect_audio_files", return_value=tasks),
-        patch("src.main.Pool") as mock_pool,
-        patch("src.main.tqdm") as mock_tqdm,
-        patch("src.main.wait_for_keypress") as mock_wait,
+        patch("main.check_ffmpeg_installed", return_value=True),
+        patch("main.collect_audio_files", return_value=tasks),
+        patch("main.Pool") as mock_pool,
+        patch("main.tqdm") as mock_tqdm,
+        patch("main.wait_for_keypress") as mock_wait,
     ):
         mock_pool_instance = MagicMock()
         mock_pool.return_value.__enter__.return_value = mock_pool_instance
@@ -334,10 +334,10 @@ def test_main(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_main_missing_ffmpeg() -> None:
     """Test that main() exits early without collecting or processing files when ffmpeg is missing."""
     with (
-        patch("src.main.check_ffmpeg_installed", return_value=False) as mock_check,
-        patch("src.main.collect_audio_files") as mock_collect,
-        patch("src.main.Pool") as mock_pool,
-        patch("src.main.wait_for_keypress") as mock_wait,
+        patch("main.check_ffmpeg_installed", return_value=False) as mock_check,
+        patch("main.collect_audio_files") as mock_collect,
+        patch("main.Pool") as mock_pool,
+        patch("main.wait_for_keypress") as mock_wait,
     ):
         main()
 
@@ -350,8 +350,8 @@ def test_main_missing_ffmpeg() -> None:
 def test_wait_for_keypress_non_interactive() -> None:
     """Test that non-TTY stdin (piped input, CI) returns immediately without blocking."""
     with (
-        patch("src.main.sys.stdin.isatty", return_value=False),
-        patch("src.main.os.name", "nt"),
+        patch("main.sys.stdin.isatty", return_value=False),
+        patch("main.os.name", "nt"),
     ):
         main_module.wait_for_keypress()
 
@@ -366,8 +366,8 @@ def test_wait_for_keypress_windows(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "msvcrt", mock_msvcrt)
 
     with (
-        patch("src.main.sys.stdin.isatty", return_value=True),
-        patch("src.main.os.name", "nt"),
+        patch("main.sys.stdin.isatty", return_value=True),
+        patch("main.os.name", "nt"),
     ):
         main_module.wait_for_keypress()
 
@@ -391,10 +391,10 @@ def test_wait_for_keypress_posix(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "tty", mock_tty)
 
     with (
-        patch("src.main.sys.stdin.isatty", return_value=True),
-        patch("src.main.sys.stdin.fileno", return_value=0),
-        patch("src.main.sys.stdin.read", return_value="x") as mock_read,
-        patch("src.main.os.name", "posix"),
+        patch("main.sys.stdin.isatty", return_value=True),
+        patch("main.sys.stdin.fileno", return_value=0),
+        patch("main.sys.stdin.read", return_value="x") as mock_read,
+        patch("main.os.name", "posix"),
     ):
         main_module.wait_for_keypress()
 
@@ -439,7 +439,7 @@ def test_process_audio_visualization(tmp_path: Path, sample_rate: int) -> None:
     output_mp3 = str(tmp_path / "test_vis_output.mp3")
     segment.export(input_wav, format="wav")
 
-    with patch("src.main.tqdm") as mock_tqdm:
+    with patch("main.tqdm") as mock_tqdm:
         mock_pbar = MagicMock()
         mock_tqdm.return_value = mock_pbar
 
@@ -599,14 +599,14 @@ def test_process_audio_lufs_flows(tmp_path: Path, sample_rate: int) -> None:
     out_mp3 = str(tmp_path / "flow_out.mp3")
     segment.export(in_wav, format="wav")
 
-    with patch("src.main._measure_lufs") as mock_measure:
+    with patch("main._measure_lufs") as mock_measure:
         mock_measure.side_effect = [-14.0, -10.0]
         process_audio((in_wav, out_mp3))
         assert mock_measure.call_count == 2
         assert os.path.exists(out_mp3)
 
     out_mp3_2 = str(tmp_path / "flow_out2.mp3")
-    with patch("src.main._measure_lufs", return_value=None):
+    with patch("main._measure_lufs", return_value=None):
         process_audio((in_wav, out_mp3_2))
         assert os.path.exists(out_mp3_2)
 
@@ -624,8 +624,8 @@ def test_collect_audio_files_edge_cases(tmp_path: Path, monkeypatch: pytest.Monk
     excluded_dir.mkdir()
     (excluded_dir / "test.mp3").touch()
 
-    monkeypatch.setattr("src.main.INPUT_ROOT", str(input_dir))
-    monkeypatch.setattr("src.main.OUTPUT_ROOT", str(tmp_path / "output"))
+    monkeypatch.setattr("main.INPUT_ROOT", str(input_dir))
+    monkeypatch.setattr("main.OUTPUT_ROOT", str(tmp_path / "output"))
 
     tasks = collect_audio_files()
     assert len(tasks) == 2
@@ -633,7 +633,7 @@ def test_collect_audio_files_edge_cases(tmp_path: Path, monkeypatch: pytest.Monk
     assert ".WAV" in extensions
     assert ".FLAC" in extensions
 
-    monkeypatch.setattr("src.main.EXCLUDED_DIRS", {".venv", "processed", "__pycache__", "nested"})
+    monkeypatch.setattr("main.EXCLUDED_DIRS", {".venv", "processed", "__pycache__", "nested"})
     tasks_excluded = collect_audio_files()
     assert len(tasks_excluded) == 0
 
