@@ -163,3 +163,6 @@ processed
 # Scalene profiler
 scalene-profile.json
 scalene-profile.html
+
+# Mutation tests
+mutants/*
