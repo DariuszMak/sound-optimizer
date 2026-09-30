@@ -6,7 +6,6 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "audioop-lts>=0.2.2",
-    "mutmut>=3.8.0",
     "numpy>=2.4.2",
     "pydub>=0.25.1",
     "pyloudnorm>=0.2.0",
@@ -16,8 +15,9 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "mypy>=1.16.0",
     "import-linter>=2.11",
+    "mutmut>=3.8.0",
+    "mypy>=1.16.0",
     "pip-audit>=2.9.0",
     "pydeps>=3.0.6",
     "pytest>=9.0.2",
