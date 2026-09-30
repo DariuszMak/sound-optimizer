@@ -10,8 +10,8 @@ import numpy as np
 import pytest
 from pydub import AudioSegment
 
-from src import main as main_module
-from src.main import (
+import main as main_module
+from main import (
     EQ_BANDS,
     EQ_Q,
     MAX_PRE_GAIN_DB,
