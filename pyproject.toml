@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "audioop-lts>=0.2.2",
+    "mutmut>=3.8.0",
     "numpy>=2.4.2",
     "pydub>=0.25.1",
     "pyloudnorm>=0.2.0",
