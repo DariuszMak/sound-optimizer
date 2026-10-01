@@ -232,4 +232,4 @@ exclude_lines = [
 ]
 
 [tool.mutmut]
-paths_to_mutate = ["src/"]
+source_paths = ["src/"]
