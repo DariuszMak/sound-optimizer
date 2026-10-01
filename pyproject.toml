@@ -234,3 +234,6 @@ exclude_lines = [
 [tool.mutmut]
 source_paths = ["src"]
 runner = "PYTHONPATH=src pytest -x"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
