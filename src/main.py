@@ -444,7 +444,7 @@ def _format_duration(seconds: float) -> str:
 
 def _bar(fraction: float, width: int) -> str:
     fraction = min(1.0, max(0.0, fraction))
-    filled = int(round(width * fraction))
+    filled = round(width * fraction)
     return "█" * filled + "░" * (width - filled)
 
 
