@@ -3,12 +3,15 @@ from __future__ import annotations
 import logging
 import multiprocessing
 import os
+from io import StringIO
+from queue import Empty
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 from pydub import AudioSegment
+from rich.console import Console
 
 from src import main as main_module
 from src.main import (
@@ -20,6 +23,9 @@ from src.main import (
     TARGET_LUFS,
     TRIM_THRESHOLD_DB,
     TRUE_PEAK_CEILING_DB,
+    Dashboard,
+    _bar,
+    _format_duration,
     _init_worker,
     _measure_lufs,
     _peaking_biquad,
@@ -34,6 +40,7 @@ from src.main import (
     main,
     process_audio,
     remove_long_silences_multi,
+    run_pool,
     smooth_gain,
     trim_silence_multi,
 )
@@ -296,39 +303,32 @@ def test_collect_audio_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     assert any("valid1.wav" in t[0] for t in tasks)
     assert any("valid2.mp3" in t[0] for t in tasks)
 
-
-def test_main(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test the main entrypoint and multiprocessing pool handling."""
-
+def test_main() -> None:
     with (
         patch("src.main.check_ffmpeg_installed", return_value=True),
         patch("src.main.collect_audio_files", return_value=[]),
+        patch("src.main.run_pool") as mock_run_empty,
         patch("src.main.wait_for_keypress") as mock_wait_empty,
     ):
         main()
 
+    mock_run_empty.assert_not_called()
     mock_wait_empty.assert_called_once()
 
     tasks = [("in.wav", "out.mp3")]
+    dashboard = Dashboard(1)
+    dashboard.apply(("done", 0, "in.wav", "ok"))
+
     with (
         patch("src.main.check_ffmpeg_installed", return_value=True),
         patch("src.main.collect_audio_files", return_value=tasks),
-        patch("src.main.Pool") as mock_pool,
-        patch("src.main.tqdm") as mock_tqdm,
+        patch("src.main.run_pool", return_value=dashboard) as mock_run,
         patch("src.main.wait_for_keypress") as mock_wait,
     ):
-        mock_pool_instance = MagicMock()
-        mock_pool.return_value.__enter__.return_value = mock_pool_instance
-        mock_pool_instance.imap_unordered.return_value = iter([None])
-        mock_tqdm.return_value = iter([None])
-
         main()
 
-        mock_pool_instance.imap_unordered.assert_called_once()
-        mock_wait.assert_called_once()
-
-        mock_tqdm.assert_called_once()
-        assert mock_tqdm.call_args.kwargs["dynamic_ncols"] is True
+    mock_run.assert_called_once_with(tasks)
+    mock_wait.assert_called_once()
 
 
 def test_main_missing_ffmpeg() -> None:
@@ -417,20 +417,23 @@ def test_format_loudness_params() -> None:
 
 
 def test_init_worker() -> None:
-    """Test worker slot initialization for multiprocessing."""
     counter = multiprocessing.Value("i", 0)
 
     _init_worker(counter)
     assert main_module._worker_slot == 0
+    assert main_module._progress_queue is None
     assert counter.value == 1
 
-    _init_worker(counter)
+    queue = MagicMock()
+    _init_worker(counter, queue)
     assert main_module._worker_slot == 1
+    assert main_module._progress_queue is queue
     assert counter.value == 2
 
 
-def test_process_audio_visualization(tmp_path: Path, sample_rate: int) -> None:
-    """Test process_audio progress bar visualization updates and loudness parameters display."""
+def test_process_audio_visualization(
+    tmp_path: Path, sample_rate: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
     sine = generate_sine_wave(duration_sec=2.0, sr=sample_rate, amp=0.5)
     sine_int16 = (sine * 32767).astype(np.int16)
     segment = AudioSegment(sine_int16.tobytes(), frame_rate=sample_rate, sample_width=2, channels=1)
@@ -439,20 +442,57 @@ def test_process_audio_visualization(tmp_path: Path, sample_rate: int) -> None:
     output_mp3 = str(tmp_path / "test_vis_output.mp3")
     segment.export(input_wav, format="wav")
 
-    with patch("src.main.tqdm") as mock_tqdm:
-        mock_pbar = MagicMock()
-        mock_tqdm.return_value = mock_pbar
+    mock_queue = MagicMock()
+    monkeypatch.setattr(main_module, "_progress_queue", mock_queue)
+    monkeypatch.setattr(main_module, "_worker_slot", 3)
 
-        process_audio((input_wav, output_mp3))
+    process_audio((input_wav, output_mp3))
 
-        mock_tqdm.assert_called_once()
-        assert mock_tqdm.call_args.kwargs["dynamic_ncols"] is True
-        assert mock_pbar.update.call_count == NUMBER_OF_STEPS
-        mock_pbar.set_postfix_str.assert_called_once()
-        postfix_arg = mock_pbar.set_postfix_str.call_args[0][0]
-        assert "Dry:" in postfix_arg
-        assert "Pre-Gain:" in postfix_arg
-        mock_pbar.close.assert_called_once()
+    messages = [call.args[0] for call in mock_queue.put.call_args_list]
+    step_messages = [m for m in messages if m[0] == "step"]
+    done_messages = [m for m in messages if m[0] == "done"]
+
+    assert len(step_messages) == NUMBER_OF_STEPS
+    assert [m[3] for m in step_messages] == list(range(1, NUMBER_OF_STEPS + 1))
+    assert all(m[1] == 3 for m in step_messages)
+    assert all(m[2] == "test_vis_input.wav" for m in step_messages)
+    assert step_messages[0][4] == "Loading"
+    assert step_messages[-1][4] == "Exporting Audio"
+
+    detail_messages = [m for m in step_messages if m[5]]
+    assert len(detail_messages) == 3
+    assert "Dry:" in detail_messages[0][5]
+    assert "Pre-Gain:" in detail_messages[0][5]
+
+    assert done_messages == [("done", 3, "test_vis_input.wav", "ok")]
+    assert os.path.exists(output_mp3)
+
+
+def test_process_audio_reports_status(
+    tmp_path: Path, sample_rate: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mock_queue = MagicMock()
+    monkeypatch.setattr(main_module, "_progress_queue", mock_queue)
+    monkeypatch.setattr(main_module, "_worker_slot", 0)
+
+    existing = tmp_path / "exists.mp3"
+    existing.write_text("dummy")
+    process_audio(("nonexistent.wav", str(existing)))
+    assert mock_queue.put.call_args_list[-1].args[0] == ("done", 0, "nonexistent.wav", "skipped")
+
+    mock_queue.reset_mock()
+    process_audio(("invalid.wav", str(tmp_path / "out_invalid.mp3")))
+    assert mock_queue.put.call_args_list[-1].args[0] == ("done", 0, "invalid.wav", "failed")
+
+    mock_queue.reset_mock()
+    silence = np.zeros(sample_rate * 2, dtype=np.float32)
+    segment = AudioSegment(
+        (silence * 32767).astype(np.int16).tobytes(), frame_rate=sample_rate, sample_width=2, channels=1
+    )
+    silence_in = str(tmp_path / "silence.wav")
+    segment.export(silence_in, format="wav")
+    process_audio((silence_in, str(tmp_path / "silence_out.mp3")))
+    assert mock_queue.put.call_args_list[-1].args[0] == ("done", 0, "silence.wav", "skipped")
 
 
 def test_constants() -> None:
@@ -655,3 +695,126 @@ def test_measure_lufs_edge_cases(sample_rate: int) -> None:
     with patch("pyloudnorm.Meter.integrated_loudness", side_effect=ValueError):
         valid_audio = np.zeros(sample_rate, dtype=np.float32)
         assert _measure_lufs(valid_audio, sample_rate) is None
+
+def render_dashboard(dashboard: Dashboard, width: int, height: int) -> str:
+    buffer = StringIO()
+    console = Console(file=buffer, width=width, height=height, force_terminal=False, color_system=None)
+    console.print(dashboard)
+    return buffer.getvalue()
+
+
+def test_format_duration() -> None:
+    assert _format_duration(0) == "00:00"
+    assert _format_duration(-5) == "00:00"
+    assert _format_duration(65) == "01:05"
+    assert _format_duration(3661) == "1:01:01"
+
+
+def test_bar() -> None:
+    assert _bar(0.5, 10) == "█████░░░░░"
+    assert _bar(0.0, 4) == "░░░░"
+    assert _bar(1.0, 4) == "████"
+    assert _bar(2.0, 4) == "████"
+    assert _bar(-1.0, 4) == "░░░░"
+
+
+def test_dashboard_apply_counts() -> None:
+    dashboard = Dashboard(4)
+    dashboard.apply(("step", 0, "a.wav", 1, "Loading", ""))
+    dashboard.apply(("step", 1, "b.wav", 2, "Trim Silence", ""))
+    assert set(dashboard.workers) == {0, 1}
+
+    dashboard.apply(("done", 0, "a.wav", "ok"))
+    dashboard.apply(("done", 1, "b.wav", "skipped"))
+    dashboard.apply(("done", 2, "c.wav", "failed"))
+
+    assert dashboard.workers == {}
+    assert dashboard.done == 3
+    assert dashboard.ok == 1
+    assert dashboard.skipped == 1
+    assert dashboard.failed == 1
+
+
+def test_dashboard_render_wide() -> None:
+    dashboard = Dashboard(4)
+    dashboard.apply(("step", 3, "song.wav", 2, "Trim Silence", "Dry: -20.0 LUFS | EQ: -19.0 LUFS | Pre-Gain: +4.0 dB"))
+
+    output = render_dashboard(dashboard, width=140, height=20)
+
+    assert "0/4" in output
+    assert "W03" in output
+    assert "2/7" in output
+    assert "Trim Silence" in output
+    assert "song.wav" in output
+    assert "Dry: -20.0 LUFS" in output
+
+
+def test_dashboard_render_eta() -> None:
+    dashboard = Dashboard(2)
+    dashboard.apply(("done", 0, "a.wav", "ok"))
+
+    output = render_dashboard(dashboard, width=100, height=10)
+
+    assert "1/2" in output
+    assert "ETA" in output
+
+
+def test_dashboard_render_narrow_limits_rows_and_width() -> None:
+    dashboard = Dashboard(32)
+    for worker_id in range(5):
+        dashboard.apply(("step", worker_id, f"very_long_file_name_{worker_id}.flac", 3, "Remove Silences", "details"))
+
+    width = 30
+    output = render_dashboard(dashboard, width=width, height=6)
+    lines = [line for line in output.splitlines() if line.strip()]
+
+    assert all(len(line) <= width for line in lines)
+    assert "+3 more workers" in output
+    assert "W00" in output
+    assert "W01" in output
+    assert "W04" not in output
+    assert "Remove Silences" not in output
+    assert "details" not in output
+
+
+def test_run_pool() -> None:
+    tasks = [("in.wav", "out.mp3")]
+    mock_queue = MagicMock()
+    mock_queue.get.side_effect = [("done", 0, "in.wav", "ok"), Empty]
+    mock_queue.get_nowait.side_effect = Empty
+
+    with (
+        patch("src.main.Pool") as mock_pool,
+        patch("src.main.Queue", return_value=mock_queue),
+        patch("src.main.Live") as mock_live,
+    ):
+        mock_pool_instance = MagicMock()
+        mock_pool.return_value.__enter__.return_value = mock_pool_instance
+
+        dashboard = run_pool(tasks)
+
+    mock_pool_instance.apply_async.assert_called_once_with(main_module.process_audio, tasks[0])
+    mock_live.assert_called_once()
+    assert dashboard.total == 1
+    assert dashboard.done == 1
+    assert dashboard.ok == 1
+
+
+def test_run_pool_stops_when_all_results_ready() -> None:
+    tasks = [("in.wav", "out.mp3"), ("in2.wav", "out2.mp3")]
+    mock_queue = MagicMock()
+    mock_queue.get.side_effect = Empty
+
+    with (
+        patch("src.main.Pool") as mock_pool,
+        patch("src.main.Queue", return_value=mock_queue),
+        patch("src.main.Live"),
+    ):
+        mock_pool_instance = MagicMock()
+        mock_pool.return_value.__enter__.return_value = mock_pool_instance
+        mock_pool_instance.apply_async.return_value.ready.return_value = True
+
+        dashboard = run_pool(tasks)
+
+    assert mock_pool_instance.apply_async.call_count == 2
+    assert dashboard.done == 0
