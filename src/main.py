@@ -3,16 +3,20 @@ import logging
 import os
 import shutil
 import sys
+import time
 import warnings
-from multiprocessing import Pool, Value, cpu_count, freeze_support
+from multiprocessing import Pool, Queue, Value, cpu_count, freeze_support
+from queue import Empty
 from typing import Any, TypeAlias, cast
 
 import numpy as np
 import pyloudnorm as pyln
 from numpy.typing import NDArray
 from pydub import AudioSegment
+from rich.console import Console, ConsoleOptions, RenderResult
+from rich.live import Live
+from rich.text import Text
 from scipy.signal import lfilter
-from tqdm import tqdm
 
 Float32Array: TypeAlias = NDArray[np.float32]
 Float64Array: TypeAlias = NDArray[np.float64]
@@ -47,13 +51,21 @@ EQ_Q = 1.0
 warnings.filterwarnings("ignore")
 
 _worker_slot: int | None = None
+_progress_queue: Any = None
 
 
-def _init_worker(counter: Any) -> None:
-    global _worker_slot
+def _init_worker(counter: Any, progress_queue: Any = None) -> None:
+    global _worker_slot, _progress_queue
+    _progress_queue = progress_queue
     with counter.get_lock():
         _worker_slot = counter.value
         counter.value += 1
+
+
+def _emit(message: tuple[Any, ...]) -> None:
+    if _progress_queue is not None:
+        with contextlib.suppress(Exception):
+            _progress_queue.put(message)
 
 
 def format_loudness_params(
@@ -334,85 +346,77 @@ def export_audio(
 
 def process_audio(task: tuple[str, str]) -> None:
     input_path, output_path = task
-    if os.path.exists(output_path):
-        return
-
     worker_id = _worker_slot if _worker_slot is not None else 0
     file_name = os.path.basename(input_path)
-    position = worker_id + 1
+    status = "failed"
 
-    pbar = tqdm(
-        total=NUMBER_OF_STEPS,
-        desc=f"W{worker_id:02d} [{file_name[:15]}] Loading",
-        position=position,
-        leave=False,
-        unit="step",
-        dynamic_ncols=True,
-    )
-    pbar.update(1)
+    def report(step: int, description: str, details: str = "") -> None:
+        _emit(("step", worker_id, file_name, step, description, details))
 
-    y, sr = load_audio(input_path)
-    if y is None or sr is None or len(y) == 0:
-        pbar.close()
-        return
-    pbar.update(1)
+    try:
+        if os.path.exists(output_path):
+            status = "skipped"
+            return
 
-    pbar.set_description(f"W{worker_id:02d} [{file_name[:15]}] Trim Silence")
-    y = trim_silence_multi(y, TRIM_THRESHOLD_DB)
-    if len(y) == 0:
-        pbar.close()
-        return
-    pbar.update(1)
+        report(1, "Loading")
+        y, sr = load_audio(input_path)
+        if y is None or sr is None or len(y) == 0:
+            return
 
-    pbar.set_description(f"W{worker_id:02d} [{file_name[:15]}] Remove Silences")
-    y = remove_long_silences_multi(y, sr)
-    if len(y) == 0:
-        pbar.close()
-        return
-    pbar.update(1)
+        report(2, "Trim Silence")
+        y = trim_silence_multi(y, TRIM_THRESHOLD_DB)
+        if len(y) == 0:
+            status = "skipped"
+            return
 
-    pbar.set_description(f"W{worker_id:02d} [{file_name[:15]}] Metering LUFS")
-    mono_dry = y.mean(axis=1).astype(np.float32) if y.ndim > 1 else y.copy()
+        report(3, "Remove Silences")
+        y = remove_long_silences_multi(y, sr)
+        if len(y) == 0:
+            status = "skipped"
+            return
 
-    mono_eq = apply_eq_for_metering(mono_dry, sr)
-    lufs_eq = _measure_lufs(mono_eq, sr)
+        report(4, "Metering LUFS")
+        mono_dry = y.mean(axis=1).astype(np.float32) if y.ndim > 1 else y.copy()
 
-    lufs_dry = _measure_lufs(mono_dry, sr)
+        mono_eq = apply_eq_for_metering(mono_dry, sr)
+        lufs_eq = _measure_lufs(mono_eq, sr)
 
-    if lufs_eq is not None and lufs_dry is not None:
-        eq_compensation_db = lufs_eq - lufs_dry
-        target_for_dry = TARGET_LUFS - eq_compensation_db
-    else:
-        target_for_dry = TARGET_LUFS
+        lufs_dry = _measure_lufs(mono_dry, sr)
 
-    gain_db: float | None = None
-    if lufs_dry is not None:
-        gain_db = float(np.clip(target_for_dry - lufs_dry, -MAX_PRE_GAIN_DB, MAX_PRE_GAIN_DB))
-        gain_lin = 10 ** (gain_db / 20.0)
-        y = (y * gain_lin).astype(np.float32)
-        mono_dry = (mono_dry * gain_lin).astype(np.float32)
+        if lufs_eq is not None and lufs_dry is not None:
+            eq_compensation_db = lufs_eq - lufs_dry
+            target_for_dry = TARGET_LUFS - eq_compensation_db
+        else:
+            target_for_dry = TARGET_LUFS
 
-    pbar.set_postfix_str(format_loudness_params(lufs_dry, lufs_eq, gain_db))
-    pbar.update(1)
+        gain_db: float | None = None
+        if lufs_dry is not None:
+            gain_db = float(np.clip(target_for_dry - lufs_dry, -MAX_PRE_GAIN_DB, MAX_PRE_GAIN_DB))
+            gain_lin = 10 ** (gain_db / 20.0)
+            y = (y * gain_lin).astype(np.float32)
+            mono_dry = (mono_dry * gain_lin).astype(np.float32)
 
-    pbar.set_description(f"W{worker_id:02d} [{file_name[:15]}] Dynamic Loudness")
-    y = dynamic_loudness_control(y, sr, TARGET_LUFS)
-    pbar.update(1)
+        details = format_loudness_params(lufs_dry, lufs_eq, gain_db)
 
-    pbar.set_description(f"W{worker_id:02d} [{file_name[:15]}] Peak Limiter")
-    if y.ndim > 1:
-        y = np.stack(
-            [limiter(y[:, c], sr, TRUE_PEAK_CEILING_DB) for c in range(y.shape[1])],
-            axis=1,
-        ).astype(np.float32)
-    else:
-        y = limiter(y, sr, TRUE_PEAK_CEILING_DB)
-    pbar.update(1)
+        report(5, "Dynamic Loudness", details)
+        y = dynamic_loudness_control(y, sr, TARGET_LUFS)
 
-    pbar.set_description(f"W{worker_id:02d} [{file_name[:15]}] Exporting Audio")
-    with contextlib.suppress(Exception):
+        report(6, "Peak Limiter", details)
+        if y.ndim > 1:
+            y = np.stack(
+                [limiter(y[:, c], sr, TRUE_PEAK_CEILING_DB) for c in range(y.shape[1])],
+                axis=1,
+            ).astype(np.float32)
+        else:
+            y = limiter(y, sr, TRUE_PEAK_CEILING_DB)
+
+        report(7, "Exporting Audio", details)
         export_audio(y.astype(np.float32), sr, output_path)
-    pbar.close()
+        status = "ok"
+    except Exception:
+        status = "failed"
+    finally:
+        _emit(("done", worker_id, file_name, status))
 
 
 def collect_audio_files() -> list[tuple[str, str]]:
@@ -429,6 +433,121 @@ def collect_audio_files() -> list[tuple[str, str]]:
     return tasks
 
 
+def _format_duration(seconds: float) -> str:
+    seconds = max(0, int(seconds))
+    hours, rest = divmod(seconds, 3600)
+    minutes, secs = divmod(rest, 60)
+    if hours:
+        return f"{hours:d}:{minutes:02d}:{secs:02d}"
+    return f"{minutes:02d}:{secs:02d}"
+
+
+def _bar(fraction: float, width: int) -> str:
+    fraction = min(1.0, max(0.0, fraction))
+    filled = int(round(width * fraction))
+    return "█" * filled + "░" * (width - filled)
+
+
+class Dashboard:
+    def __init__(self, total: int) -> None:
+        self.total = total
+        self.done = 0
+        self.ok = 0
+        self.skipped = 0
+        self.failed = 0
+        self.workers: dict[int, tuple[str, int, str, str]] = {}
+        self.started = time.monotonic()
+
+    def apply(self, message: tuple[Any, ...]) -> None:
+        kind = message[0]
+        if kind == "step":
+            _, worker_id, file_name, step, description, details = message
+            self.workers[worker_id] = (file_name, step, description, details)
+        elif kind == "done":
+            _, worker_id, _file_name, status = message
+            self.workers.pop(worker_id, None)
+            self.done += 1
+            if status == "ok":
+                self.ok += 1
+            elif status == "skipped":
+                self.skipped += 1
+            else:
+                self.failed += 1
+
+    def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
+        width = max(20, options.max_width)
+        height = max(3, console.size.height)
+
+        elapsed = time.monotonic() - self.started
+        fraction = self.done / self.total if self.total else 1.0
+        eta = (elapsed / self.done) * (self.total - self.done) if self.done else 0.0
+        bar_width = 20 if width >= 70 else 10 if width >= 40 else 0
+
+        header = Text(no_wrap=True, overflow="ellipsis")
+        header.append(f"{fraction * 100:3.0f}% ", style="bold")
+        if bar_width:
+            header.append(_bar(fraction, bar_width) + " ", style="cyan")
+        header.append(f"{self.done}/{self.total} ")
+        header.append(f"ok:{self.ok} ", style="green")
+        header.append(f"skip:{self.skipped} ", style="yellow")
+        header.append(f"fail:{self.failed} ", style="red")
+        header.append(f"{_format_duration(elapsed)}", style="dim")
+        if self.done and self.done < self.total:
+            header.append(f" ETA {_format_duration(eta)}", style="dim")
+        yield header
+
+        available = max(1, height - 3)
+        items = sorted(self.workers.items())
+        if len(items) > available:
+            shown = items[: max(1, available - 1)]
+            hidden = len(items) - len(shown)
+        else:
+            shown = items
+            hidden = 0
+
+        for worker_id, (file_name, step, description, details) in shown:
+            row = Text(no_wrap=True, overflow="ellipsis")
+            row.append(f"W{worker_id:02d} ", style="bold")
+            row.append(f"{step}/{NUMBER_OF_STEPS} ", style="cyan")
+            if width >= 50:
+                row.append(f"{description:<16} ")
+            row.append(file_name, style="white")
+            if details and width >= 110:
+                row.append(f"  {details}", style="dim")
+            yield row
+
+        if hidden:
+            yield Text(f"+{hidden} more workers", style="dim", no_wrap=True)
+
+
+def run_pool(tasks: list[tuple[str, str]]) -> Dashboard:
+    workers = max(1, cpu_count() - 1)
+    slot_counter = Value("i", 0)
+    progress_queue: Any = Queue()
+    dashboard = Dashboard(len(tasks))
+    console = Console()
+
+    with Pool(workers, initializer=_init_worker, initargs=(slot_counter, progress_queue)) as pool:
+        results = [pool.apply_async(process_audio, (task,)) for task in tasks]
+        with Live(
+            dashboard,
+            console=console,
+            refresh_per_second=10,
+            vertical_overflow="crop",
+            transient=False,
+        ):
+            while dashboard.done < dashboard.total:
+                try:
+                    dashboard.apply(progress_queue.get(timeout=0.1))
+                    while True:
+                        dashboard.apply(progress_queue.get_nowait())
+                except Empty:
+                    if all(r.ready() for r in results):
+                        break
+
+    return dashboard
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
@@ -440,21 +559,14 @@ def main() -> None:
         if not tasks:
             return
 
-        workers = max(1, cpu_count() - 1)
-        slot_counter = Value("i", 0)
-        with Pool(workers, initializer=_init_worker, initargs=(slot_counter,)) as pool:
-            list(
-                tqdm(
-                    pool.imap_unordered(process_audio, tasks),
-                    total=len(tasks),
-                    desc="Processing audio",
-                    unit="file",
-                    position=0,
-                    dynamic_ncols=True,
-                )
-            )
+        dashboard = run_pool(tasks)
 
-        logger.info("Processing done.")
+        logger.info(
+            "Processing done. OK: %d | Skipped: %d | Failed: %d",
+            dashboard.ok,
+            dashboard.skipped,
+            dashboard.failed,
+        )
     finally:
         wait_for_keypress()
 
