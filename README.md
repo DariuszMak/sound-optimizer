@@ -37,7 +37,7 @@ winget install ffmpeg --silent --accept-package-agreements --accept-source-agree
 ### Local development with profiler
 
 ```console
-clear ; task local-static-tests ; task local-dev-native-profile ; # task full-dev-native ; 
+clear ; task dev-env ; task local-static-tests ; task local-dev-native-profile ; # task full-dev-native ; 
 ```
 
 ### Generate diagrams
