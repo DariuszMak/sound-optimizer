@@ -303,6 +303,7 @@ def test_collect_audio_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     assert any("valid1.wav" in t[0] for t in tasks)
     assert any("valid2.mp3" in t[0] for t in tasks)
 
+
 def test_main() -> None:
     with (
         patch("src.main.check_ffmpeg_installed", return_value=True),
@@ -431,9 +432,7 @@ def test_init_worker() -> None:
     assert counter.value == 2
 
 
-def test_process_audio_visualization(
-    tmp_path: Path, sample_rate: int, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_process_audio_visualization(tmp_path: Path, sample_rate: int, monkeypatch: pytest.MonkeyPatch) -> None:
     sine = generate_sine_wave(duration_sec=2.0, sr=sample_rate, amp=0.5)
     sine_int16 = (sine * 32767).astype(np.int16)
     segment = AudioSegment(sine_int16.tobytes(), frame_rate=sample_rate, sample_width=2, channels=1)
@@ -468,9 +467,7 @@ def test_process_audio_visualization(
     assert os.path.exists(output_mp3)
 
 
-def test_process_audio_reports_status(
-    tmp_path: Path, sample_rate: int, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_process_audio_reports_status(tmp_path: Path, sample_rate: int, monkeypatch: pytest.MonkeyPatch) -> None:
     mock_queue = MagicMock()
     monkeypatch.setattr(main_module, "_progress_queue", mock_queue)
     monkeypatch.setattr(main_module, "_worker_slot", 0)
@@ -696,6 +693,7 @@ def test_measure_lufs_edge_cases(sample_rate: int) -> None:
         valid_audio = np.zeros(sample_rate, dtype=np.float32)
         assert _measure_lufs(valid_audio, sample_rate) is None
 
+
 def render_dashboard(dashboard: Dashboard, width: int, height: int) -> str:
     buffer = StringIO()
     console = Console(file=buffer, width=width, height=height, force_terminal=False, color_system=None)
@@ -793,7 +791,7 @@ def test_run_pool() -> None:
 
         dashboard = run_pool(tasks)
 
-    mock_pool_instance.apply_async.assert_called_once_with(main_module.process_audio, tasks[0])
+    mock_pool_instance.apply_async.assert_called_once_with(main_module.process_audio, (tasks[0],))
     mock_live.assert_called_once()
     assert dashboard.total == 1
     assert dashboard.done == 1
