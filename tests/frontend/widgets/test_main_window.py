@@ -1,21 +1,25 @@
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
-import pytest
-from pytestqt.qtbot import QtBot
+
 from PySide6.QtWidgets import QMessageBox
 
 from src.frontend.widgets.main_window import (
     MainWindow,
-    _PoolRunner,
     _build_tasks,
     _file_dialog_filter,
     _output_path,
+    _PoolRunner,
     _scan_folder,
     create_app,
 )
 from src.main import SUPPORTED
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from pytestqt.qtbot import QtBot
 
 
 def test_file_dialog_filter() -> None:
@@ -91,4 +95,121 @@ def test_set_tasks_valid(qtbot: QtBot) -> None:
 
 
 @patch("PySide6.QtWidgets.QFileDialog.getOpenFileNames")
-def test_on_select_files(mock_file_dialog: MagicMock, qtbot: QtBot)
+def test_on_select_files(mock_file_dialog: MagicMock, qtbot: QtBot) -> None:
+    mock_file_dialog.return_value = (["/path/to/file.mp3"], "")
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window._on_select_files()
+    assert window._start_button.isEnabled() is True
+
+
+@patch("PySide6.QtWidgets.QFileDialog.getOpenFileNames")
+def test_on_select_files_cancelled(mock_file_dialog: MagicMock, qtbot: QtBot) -> None:
+    mock_file_dialog.return_value = ([], "")
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window._on_select_files()
+    assert window._start_button.isEnabled() is False
+
+
+@patch("PySide6.QtWidgets.QFileDialog.getExistingDirectory")
+def test_on_select_folder(mock_dir_dialog: MagicMock, qtbot: QtBot, tmp_path: Path) -> None:
+    audio_file = tmp_path / f"song{SUPPORTED[0]}"
+    audio_file.write_text("data")
+    mock_dir_dialog.return_value = str(tmp_path)
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window._on_select_folder()
+    assert window._start_button.isEnabled() is True
+
+
+@patch("PySide6.QtWidgets.QFileDialog.getExistingDirectory")
+def test_on_select_folder_cancelled(mock_dir_dialog: MagicMock, qtbot: QtBot) -> None:
+    mock_dir_dialog.return_value = ""
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window._on_select_folder()
+    assert window._start_button.isEnabled() is False
+
+
+@patch("src.frontend.widgets.main_window.check_ffmpeg_installed")
+def test_on_start_processing_no_ffmpeg(mock_ffmpeg: MagicMock, qtbot: QtBot) -> None:
+    mock_ffmpeg.return_value = False
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window._tasks = [("in.mp3", "out.mp3")]
+
+    with patch("PySide6.QtWidgets.QMessageBox.critical") as mock_crit:
+        window._on_start_processing()
+        mock_crit.assert_called_once()
+
+
+@patch("src.frontend.widgets.main_window.check_ffmpeg_installed")
+@patch("src.frontend.widgets.main_window._PoolRunner")
+def test_on_start_processing_success(mock_runner_cls: MagicMock, mock_ffmpeg: MagicMock, qtbot: QtBot) -> None:
+    mock_ffmpeg.return_value = True
+    mock_runner = MagicMock()
+    mock_runner_cls.return_value = mock_runner
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window._tasks = [("in.mp3", "out.mp3")]
+
+    window._on_start_processing()
+    mock_runner.start.assert_called_once()
+    assert window._is_processing is True
+
+
+def test_pool_runner_lifecycle() -> None:
+    tasks: list[tuple[str, str]] = [("in.mp3", "out.mp3")]
+    runner = _PoolRunner(tasks)
+    assert runner.state.total == 1
+
+    with (
+        patch("src.frontend.widgets.main_window.Pool") as mock_pool_cls,
+        patch("src.frontend.widgets.main_window.Queue"),
+    ):
+        mock_pool = MagicMock()
+        mock_pool_cls.return_value = mock_pool
+        runner.start()
+        assert runner._pool is not None
+
+        runner.shutdown()
+        assert runner._pool is None
+
+
+def test_close_event_no_runner(qtbot: QtBot) -> None:
+    window = MainWindow()
+    qtbot.addWidget(window)
+    event = MagicMock()
+    window.closeEvent(event)
+    event.accept.assert_called_once()
+
+
+def test_close_event_with_runner_yes(qtbot: QtBot) -> None:
+    window = MainWindow()
+    qtbot.addWidget(window)
+    mock_runner = MagicMock()
+    window._runner = mock_runner
+
+    with patch("PySide6.QtWidgets.QMessageBox.question") as mock_question:
+        mock_question.return_value = QMessageBox.StandardButton.Yes
+        event = MagicMock()
+        window.closeEvent(event)
+        event.accept.assert_called_once()
+        mock_runner.shutdown.assert_called_once()
+
+
+def test_close_event_with_runner_no(qtbot: QtBot) -> None:
+    window = MainWindow()
+    qtbot.addWidget(window)
+    mock_runner = MagicMock()
+    window._runner = mock_runner
+
+    with patch("PySide6.QtWidgets.QMessageBox.question") as mock_question:
+        mock_question.return_value = QMessageBox.StandardButton.No
+        event = MagicMock()
+        window.closeEvent(event)
+        event.ignore.assert_called_once()
+        mock_runner.shutdown.assert_not_called()
