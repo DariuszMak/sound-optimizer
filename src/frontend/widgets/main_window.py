@@ -305,7 +305,7 @@ class MainWindow(QWidget):
             self._runner.deleteLater()
             self._runner = None
 
-    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
+    def closeEvent(self, event: QCloseEvent) -> None:  # ruff: ignore[invalid-function-name]
         if self._runner is not None:
             answer = QMessageBox.question(
                 self,
