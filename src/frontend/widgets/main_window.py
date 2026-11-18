@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 from multiprocessing import Pool, Queue, Value, cpu_count
@@ -13,7 +14,15 @@ from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QMessageBox, QPu
 
 from src.frontend.processing.processing_state import ProcessingState
 from src.frontend.widgets.processing_widget import ProcessingWidget
-from src.main import EXCLUDED_DIRS, INPUT_ROOT, OUTPUT_ROOT, SUPPORTED, _init_worker, check_ffmpeg_installed, process_audio
+from src.main import (
+    EXCLUDED_DIRS,
+    INPUT_ROOT,
+    OUTPUT_ROOT,
+    SUPPORTED,
+    _init_worker,
+    check_ffmpeg_installed,
+    process_audio,
+)
 
 logger = logging.getLogger(__name__)
 _POLL_INTERVAL_MS = 100
@@ -89,7 +98,9 @@ class _PoolRunner(QObject):
     def _worker_processes(self) -> list[psutil.Process]:
         if self._pool is None:
             return []
-        return [psutil.Process(worker.pid) for worker in self._pool._pool if worker.pid is not None and worker.is_alive()]
+        return [
+            psutil.Process(worker.pid) for worker in self._pool._pool if worker.pid is not None and worker.is_alive()
+        ]
 
     def _suspend_process_tree(self) -> None:
         trees: list[tuple[psutil.Process, list[psutil.Process]]] = []
@@ -102,10 +113,8 @@ class _PoolRunner(QObject):
                 tree_entry: tuple[psutil.Process, list[psutil.Process]] = (worker, [])
                 trees.append(tree_entry)
                 children: list[psutil.Process] = []
-                try:
+                with contextlib.suppress(psutil.NoSuchProcess):
                     children = worker.children(recursive=True)
-                except psutil.NoSuchProcess:
-                    pass
                 suspended_children: list[psutil.Process] = []
                 for child in reversed(children):
                     try:
@@ -292,7 +301,9 @@ class MainWindow(QWidget):
             self._processing_widget.reset()
 
     def _on_select_files(self) -> None:
-        files, _ = QFileDialog.getOpenFileNames(self, "Select Audio Files", os.path.abspath(INPUT_ROOT), _file_dialog_filter())
+        files, _ = QFileDialog.getOpenFileNames(
+            self, "Select Audio Files", os.path.abspath(INPUT_ROOT), _file_dialog_filter()
+        )
         if files:
             self._set_tasks(_build_tasks(files, INPUT_ROOT))
 
@@ -312,7 +323,11 @@ class MainWindow(QWidget):
         if not self._tasks or self._is_processing:
             return
         if not check_ffmpeg_installed():
-            QMessageBox.critical(self, "FFmpeg Required", "FFmpeg is not installed or not found in PATH.\\nPlease install FFmpeg to continue.")
+            QMessageBox.critical(
+                self,
+                "FFmpeg Required",
+                "FFmpeg is not installed or not found in PATH.\\nPlease install FFmpeg to continue.",
+            )
             return
         self._set_busy(True)
         self._file_label.setText("Processing...")
@@ -347,7 +362,13 @@ class MainWindow(QWidget):
 
     def closeEvent(self, event: QCloseEvent) -> None:  # ruff: ignore[invalid-function-name]
         if self._runner is not None:
-            answer = QMessageBox.question(self, "Processing in progress", "Processing is still running. Stop it and quit?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+            answer = QMessageBox.question(
+                self,
+                "Processing in progress",
+                "Processing is still running. Stop it and quit?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
             if answer != QMessageBox.StandardButton.Yes:
                 event.ignore()
                 return

@@ -47,7 +47,10 @@ class ProcessingState:
         if message[0] == "step":
             _, worker_id, file_name, step, description, details = message
             self.workers[int(cast("int", worker_id))] = (
-                str(file_name), int(cast("int", step)), str(description), str(details)
+                str(file_name),
+                int(cast("int", step)),
+                str(description),
+                str(details),
             )
         elif message[0] == "done":
             _, worker_id, _file_name, status = message
