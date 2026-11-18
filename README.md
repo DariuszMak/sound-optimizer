@@ -34,6 +34,12 @@
 winget install ffmpeg --silent --accept-package-agreements --accept-source-agreements ; 
 ```
 
+### Create executable version:
+
+```console
+task full-release-setup ; 
+```
+
 ### Local development with profiler
 
 ```console
