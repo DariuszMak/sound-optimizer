@@ -51,7 +51,7 @@ if TYPE_CHECKING:
 
 
 def test_check_ffmpeg_installed_present(caplog: pytest.LogCaptureFixture) -> None:
-    """Test that no warning is logged and True is returned when ffmpeg is found."""
+
     with (
         patch("src.main.shutil.which", return_value="/usr/bin/ffmpeg") as mock_which,
         caplog.at_level(logging.ERROR, logger="src.main"),
@@ -64,7 +64,7 @@ def test_check_ffmpeg_installed_present(caplog: pytest.LogCaptureFixture) -> Non
 
 
 def test_check_ffmpeg_installed_missing(caplog: pytest.LogCaptureFixture) -> None:
-    """Test that a red error is logged and False is returned when ffmpeg is missing."""
+
     with (
         patch("src.main.shutil.which", return_value=None) as mock_which,
         caplog.at_level(logging.ERROR, logger="src.main"),
@@ -83,7 +83,7 @@ def test_check_ffmpeg_installed_missing(caplog: pytest.LogCaptureFixture) -> Non
 
 
 def test_peaking_biquad() -> None:
-    """Test peaking biquad filter coefficient generation."""
+
     b, a = _peaking_biquad(1000.0, 3.0, 1.0, 44100)
     assert len(b) == 3
     assert len(a) == 3
@@ -92,7 +92,7 @@ def test_peaking_biquad() -> None:
 
 
 def test_apply_eq_for_metering(sample_rate: int) -> None:
-    """Test EQ filter application for LUFS metering."""
+
     sine = generate_sine_wave(duration_sec=0.1, sr=sample_rate)
     out = apply_eq_for_metering(sine, sample_rate)
 
@@ -109,7 +109,7 @@ def test_apply_eq_for_metering(sample_rate: int) -> None:
 
 
 def test_trim_silence_multi(sample_rate: int) -> None:
-    """Test that leading and trailing silences are accurately trimmed."""
+
     silence = np.zeros(sample_rate * 1, dtype=np.float32)
     sine = generate_sine_wave(duration_sec=1.0, sr=sample_rate)
 
@@ -130,7 +130,7 @@ def test_trim_silence_multi(sample_rate: int) -> None:
 
 
 def test_remove_long_silences_multi(sample_rate: int) -> None:
-    """Test that silences exceeding the minimum duration are removed."""
+
     sine1 = generate_sine_wave(duration_sec=1.0, sr=sample_rate)
     silence = np.zeros(int(sample_rate * 2.5), dtype=np.float32)
     sine2 = generate_sine_wave(duration_sec=1.0, sr=sample_rate)
@@ -148,7 +148,7 @@ def test_remove_long_silences_multi(sample_rate: int) -> None:
 
 
 def test_measure_lufs(sample_rate: int) -> None:
-    """Test that LUFS metering requires a minimum audio length and returns valid floats."""
+
     valid_audio = generate_sine_wave(duration_sec=1.0, sr=sample_rate)
     short_audio = generate_sine_wave(duration_sec=0.1, sr=sample_rate)
 
@@ -160,7 +160,7 @@ def test_measure_lufs(sample_rate: int) -> None:
 
 
 def test_smooth_gain(sample_rate: int) -> None:
-    """Test gain smoothing algorithm."""
+
     gains = np.array([0.0, 5.0, -5.0, 2.0], dtype=np.float32)
     smoothed = smooth_gain(gains, sample_rate, attack_sec=0.1, release_sec=0.2)
 
@@ -169,7 +169,6 @@ def test_smooth_gain(sample_rate: int) -> None:
 
 
 def test_dynamic_loudness_control(sample_rate: int) -> None:
-    """Test dynamic loudness control over varying volumes."""
 
     sine = generate_sine_wave(duration_sec=9.0, sr=sample_rate).reshape(-1, 1)
     out = dynamic_loudness_control(sine, sample_rate, target_lufs=-16.0, window_sec=8.0)
@@ -187,7 +186,7 @@ def test_dynamic_loudness_control(sample_rate: int) -> None:
 
 
 def test_limiter(sample_rate: int) -> None:
-    """Test that the true peak limiter enforces the maximum ceiling."""
+
     loud_signal = generate_sine_wave(duration_sec=0.5, sr=sample_rate, amp=2.0)
     ceiling_db = -1.0
     ceiling_lin = 10 ** (ceiling_db / 20)
@@ -207,7 +206,7 @@ def test_limiter(sample_rate: int) -> None:
 
 
 def test_load_and_export_audio(tmp_path: Path, sample_rate: int) -> None:
-    """Test audio I/O mechanisms."""
+
     sine = generate_sine_wave(duration_sec=0.5, sr=sample_rate)
     sine_2d = np.column_stack((sine, sine))
 
@@ -228,7 +227,7 @@ def test_load_and_export_audio(tmp_path: Path, sample_rate: int) -> None:
 
 
 def test_process_audio_end_to_end(tmp_path: Path, sample_rate: int) -> None:
-    """Test the entire audio pipeline by mocking file I/O on disk."""
+
     sine = generate_sine_wave(duration_sec=2.0, sr=sample_rate, amp=0.5)
     sine_int16 = (sine * 32767).astype(np.int16)
 
@@ -247,7 +246,6 @@ def test_process_audio_end_to_end(tmp_path: Path, sample_rate: int) -> None:
 
 
 def test_process_audio_edge_cases(tmp_path: Path, sample_rate: int) -> None:
-    """Test early returns and multichannel handling in process_audio."""
 
     out_existing = str(tmp_path / "exists.mp3")
     with open(out_existing, "w") as f:
@@ -281,7 +279,7 @@ def test_process_audio_edge_cases(tmp_path: Path, sample_rate: int) -> None:
 
 
 def test_collect_audio_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test file discovery filtering by extension and excluded directories."""
+
     input_dir = tmp_path / "input"
     output_dir = tmp_path / "output"
     input_dir.mkdir()
@@ -327,7 +325,7 @@ def test_main() -> None:
 
 
 def test_main_missing_ffmpeg() -> None:
-    """Test that main() exits early without collecting or processing files when ffmpeg is missing."""
+
     with (
         patch("src.main.check_ffmpeg_installed", return_value=False) as mock_check,
         patch("src.main.collect_audio_files") as mock_collect,
@@ -343,7 +341,7 @@ def test_main_missing_ffmpeg() -> None:
 
 
 def test_wait_for_keypress_non_interactive() -> None:
-    """Test that non-TTY stdin (piped input, CI) returns immediately without blocking."""
+
     with (
         patch("src.main.sys.stdin.isatty", return_value=False),
         patch("src.main.os.name", "nt"),
@@ -352,7 +350,7 @@ def test_wait_for_keypress_non_interactive() -> None:
 
 
 def test_wait_for_keypress_windows(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test the Windows code path uses msvcrt.getch() to read a single keypress."""
+
     import sys
     import types
 
@@ -370,7 +368,7 @@ def test_wait_for_keypress_windows(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_wait_for_keypress_posix(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test the POSIX code path reads a single raw keypress via termios/tty."""
+
     import sys
     import types
 
@@ -399,7 +397,7 @@ def test_wait_for_keypress_posix(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_format_loudness_params() -> None:
-    """Test formatting of sound loudness parameters for console output."""
+
     formatted = format_loudness_params(lufs_dry=-20.5, lufs_eq=-18.2, gain_db=4.5)
     assert "Dry: -20.5 LUFS" in formatted
     assert "EQ: -18.2 LUFS" in formatted

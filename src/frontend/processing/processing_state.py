@@ -6,8 +6,6 @@ from dataclasses import dataclass, field
 
 @dataclass
 class ProcessingState:
-    """Pure data model for tracking audio processing progress."""
-
     total: int = 0
     done: int = 0
     ok: int = 0

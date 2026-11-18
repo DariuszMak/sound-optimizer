@@ -26,8 +26,6 @@ def _format_duration(seconds: float) -> str:
 
 
 class WorkerInfoWidget(QWidget):
-    """Displays information about a single worker's processing state."""
-
     def __init__(self, worker_id: int, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._worker_id = worker_id
@@ -71,8 +69,6 @@ class WorkerInfoWidget(QWidget):
 
 
 class ProcessingWidget(QWidget):
-    """Live processing dashboard widget that displays worker progress."""
-
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._state = ProcessingState()

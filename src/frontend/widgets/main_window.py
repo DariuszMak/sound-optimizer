@@ -48,7 +48,7 @@ def _file_dialog_filter() -> str:
 
 
 def _output_path(input_path: str, base_dir: str) -> str:
-    """Same naming scheme as ``collect_audio_files``: ``<OUTPUT_ROOT>/<relative>_processed.mp3``."""
+
     try:
         relative_path = os.path.relpath(input_path, base_dir)
     except ValueError:  # e.g. different drives on Windows
@@ -89,8 +89,6 @@ def _scan_folder(folder: str) -> list[str]:
 
 
 class _PoolRunner(QObject):
-    """Runs ``process_audio`` in a process pool and publishes progress to the GUI thread."""
-
     state_updated = Signal(object)  # ProcessingState
     finished = Signal(object)  # ProcessingState
 
@@ -127,7 +125,7 @@ class _PoolRunner(QObject):
         self._timer.start()
 
     def shutdown(self) -> None:
-        """Abort immediately (used when the window is closed mid-run)."""
+
         self._timer.stop()
         pool, self._pool = self._pool, None
         if pool is not None:
@@ -176,8 +174,6 @@ class _PoolRunner(QObject):
 
 
 class MainWindow(QWidget):
-    """Main application window for the sound optimizer."""
-
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Sound Optimizer")
@@ -323,5 +319,5 @@ class MainWindow(QWidget):
 
 
 def create_app() -> MainWindow:
-    """Factory function to create and return the main application window."""
+
     return MainWindow()
