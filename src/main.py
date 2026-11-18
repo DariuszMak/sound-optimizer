@@ -13,6 +13,7 @@ import numpy as np
 import pyloudnorm as pyln
 from numpy.typing import NDArray
 from pydub import AudioSegment
+from PySide6.QtWidgets import QApplication
 from rich.console import Console, ConsoleOptions, RenderResult
 from rich.live import Live
 from rich.text import Text
@@ -555,18 +556,16 @@ def main() -> None:
         if not check_ffmpeg_installed():
             return
 
-        tasks = collect_audio_files()
-        if not tasks:
-            return
+        app = QApplication(sys.argv)
+        app.setApplicationName("Sound Optimizer")
+        app.setOrganizationName("Sound Optimizer")
 
-        dashboard = run_pool(tasks)
+        from src.frontend.widgets.main_window import MainWindow
 
-        logger.info(
-            "Processing done. OK: %d | Skipped: %d | Failed: %d",
-            dashboard.ok,
-            dashboard.skipped,
-            dashboard.failed,
-        )
+        window = MainWindow()
+        window.show()
+
+        sys.exit(app.exec())
     finally:
         wait_for_keypress()
 

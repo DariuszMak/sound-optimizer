@@ -307,28 +307,22 @@ def test_collect_audio_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
 def test_main() -> None:
     with (
         patch("src.main.check_ffmpeg_installed", return_value=True),
-        patch("src.main.collect_audio_files", return_value=[]),
-        patch("src.main.run_pool") as mock_run_empty,
-        patch("src.main.wait_for_keypress") as mock_wait_empty,
-    ):
-        main()
-
-    mock_run_empty.assert_not_called()
-    mock_wait_empty.assert_called_once()
-
-    tasks = [("in.wav", "out.mp3")]
-    dashboard = Dashboard(1)
-    dashboard.apply(("done", 0, "in.wav", "ok"))
-
-    with (
-        patch("src.main.check_ffmpeg_installed", return_value=True),
-        patch("src.main.collect_audio_files", return_value=tasks),
-        patch("src.main.run_pool", return_value=dashboard) as mock_run,
+        patch("src.main.QApplication") as mock_app_cls,
+        patch("src.frontend.widgets.main_window.MainWindow") as mock_window,
         patch("src.main.wait_for_keypress") as mock_wait,
+        patch("sys.exit"),
     ):
+        mock_app = MagicMock()
+        mock_app_cls.return_value = mock_app
         main()
 
-    mock_run.assert_called_once_with(tasks)
+    mock_app_cls.assert_called_once()
+    mock_app.setApplicationName.assert_called_once_with("Sound Optimizer")
+    mock_app.setOrganizationName.assert_called_once_with("Sound Optimizer")
+    mock_window.assert_called_once()
+    window = mock_window.return_value
+    window.show.assert_called_once()
+    mock_app.exec.assert_called_once()
     mock_wait.assert_called_once()
 
 
