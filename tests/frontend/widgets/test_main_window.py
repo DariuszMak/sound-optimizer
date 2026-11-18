@@ -26,9 +26,9 @@ if TYPE_CHECKING:
 @pytest.fixture(autouse=True)
 def auto_mock_message_box(monkeypatch: pytest.MonkeyPatch) -> None:
     """Automatically mock all message boxes globally so no windows pop up during tests."""
-    monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.StandardButton.No)
-    monkeypatch.setattr(QMessageBox, "information", lambda *args, **kwargs: None)
-    monkeypatch.setattr(QMessageBox, "critical", lambda *args, **kwargs: None)
+    monkeypatch.setattr(QMessageBox, "question", lambda *_, **__: QMessageBox.StandardButton.No)
+    monkeypatch.setattr(QMessageBox, "information", lambda *_, **__: None)
+    monkeypatch.setattr(QMessageBox, "critical", lambda *_, **__: None)
 
 
 def test_file_dialog_filter() -> None:
@@ -199,7 +199,7 @@ def test_close_event_with_runner_yes(qtbot: QtBot, monkeypatch: pytest.MonkeyPat
     mock_runner = MagicMock()
     window._runner = mock_runner
 
-    monkeypatch.setattr(QMessageBox, "question", lambda *a, **kw: QMessageBox.StandardButton.Yes)
+    monkeypatch.setattr(QMessageBox, "question", lambda *_, **__: QMessageBox.StandardButton.Yes)
 
     event = MagicMock()
     window.closeEvent(event)
@@ -213,7 +213,7 @@ def test_close_event_with_runner_no(qtbot: QtBot, monkeypatch: pytest.MonkeyPatc
     mock_runner = MagicMock()
     window._runner = mock_runner
 
-    monkeypatch.setattr(QMessageBox, "question", lambda *a, **kw: QMessageBox.StandardButton.No)
+    monkeypatch.setattr(QMessageBox, "question", lambda *_, **__: QMessageBox.StandardButton.No)
 
     event = MagicMock()
     window.closeEvent(event)
