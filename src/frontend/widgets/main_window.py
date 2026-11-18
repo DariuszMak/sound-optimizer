@@ -6,8 +6,8 @@ from multiprocessing import Pool, Queue, Value, cpu_count
 from queue import Empty
 from typing import Any
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont
+from PySide6.QtCore import QObject, Qt, QTimer, Signal
+from PySide6.QtGui import QCloseEvent, QFont
 from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
@@ -20,14 +20,159 @@ from PySide6.QtWidgets import (
 
 from src.frontend.processing.processing_state import ProcessingState
 from src.frontend.widgets.processing_widget import ProcessingWidget
+
+# NOTE: ``_init_worker`` MUST be the one from ``src.main``: it sets the module-level
+# ``_worker_slot`` / ``_progress_queue`` globals that ``process_audio`` reads through
+# ``_emit``. A copy defined in this module would set globals nobody reads, and the
+# GUI would never receive any progress messages.
 from src.main import (
+    EXCLUDED_DIRS,
+    INPUT_ROOT,
     OUTPUT_ROOT,
     SUPPORTED,
+    _init_worker,
     check_ffmpeg_installed,
     process_audio,
 )
 
 logger = logging.getLogger(__name__)
+
+_POLL_INTERVAL_MS = 100
+
+
+def _file_dialog_filter() -> str:
+    patterns: list[str] = []
+    for ext in SUPPORTED:
+        patterns.extend((f"*{ext}", f"*{ext.upper()}"))
+    return f"Audio Files ({' '.join(patterns)});;All Files (*)"
+
+
+def _output_path(input_path: str, base_dir: str) -> str:
+    """Same naming scheme as ``collect_audio_files``: ``<OUTPUT_ROOT>/<relative>_processed.mp3``."""
+    try:
+        relative_path = os.path.relpath(input_path, base_dir)
+    except ValueError:  # e.g. different drives on Windows
+        relative_path = os.path.basename(input_path)
+    if relative_path == os.pardir or relative_path.startswith(os.pardir + os.sep):
+        relative_path = os.path.basename(input_path)
+    relative_base = os.path.splitext(relative_path)[0]
+    return os.path.join(OUTPUT_ROOT, relative_base + "_processed.mp3")
+
+
+def _build_tasks(input_paths: list[str], base_dir: str) -> list[tuple[str, str]]:
+    tasks: list[tuple[str, str]] = []
+    used_outputs: set[str] = set()
+    for raw_path in input_paths:
+        input_path = os.path.normpath(raw_path)
+        if not input_path.lower().endswith(SUPPORTED):
+            continue
+        output_path = _output_path(input_path, base_dir)
+
+        # Two inputs with the same name in different folders must not overwrite each other.
+        stem, ext = os.path.splitext(output_path)
+        counter = 2
+        while output_path in used_outputs:
+            output_path = f"{stem}_{counter}{ext}"
+            counter += 1
+        used_outputs.add(output_path)
+
+        tasks.append((input_path, output_path))
+    return tasks
+
+
+def _scan_folder(folder: str) -> list[str]:
+    found: list[str] = []
+    for root, dirs, files in os.walk(folder):
+        dirs[:] = [d for d in dirs if d not in EXCLUDED_DIRS]
+        found.extend(os.path.join(root, name) for name in sorted(files) if name.lower().endswith(SUPPORTED))
+    return found
+
+
+class _PoolRunner(QObject):
+    """Runs ``process_audio`` in a process pool and publishes progress to the GUI thread."""
+
+    state_updated = Signal(object)  # ProcessingState
+    finished = Signal(object)  # ProcessingState
+
+    def __init__(self, tasks: list[tuple[str, str]], parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self._tasks = tasks
+        self._state = ProcessingState(total=len(tasks))
+        self._pool: Any = None
+        self._queue: Any = None
+        self._results: list[Any] = []
+
+        self._timer = QTimer(self)
+        self._timer.setInterval(_POLL_INTERVAL_MS)
+        self._timer.timeout.connect(self._poll)
+
+    @property
+    def state(self) -> ProcessingState:
+        return self._state
+
+    def start(self) -> None:
+        slot_counter = Value("i", 0)
+        self._queue = Queue()
+        self._state = ProcessingState(total=len(self._tasks))
+
+        workers = max(1, cpu_count() - 1)
+        self._pool = Pool(
+            workers,
+            initializer=_init_worker,
+            initargs=(slot_counter, self._queue),
+        )
+        self._results = [self._pool.apply_async(process_audio, (task,)) for task in self._tasks]
+
+        self.state_updated.emit(self._state)
+        self._timer.start()
+
+    def shutdown(self) -> None:
+        """Abort immediately (used when the window is closed mid-run)."""
+        self._timer.stop()
+        pool, self._pool = self._pool, None
+        if pool is not None:
+            pool.terminate()
+            pool.join()
+        self._queue = None
+
+    def _drain(self, timeout: float | None = None) -> bool:
+        queue = self._queue
+        if queue is None:
+            return False
+        changed = False
+        while True:
+            try:
+                message = queue.get(timeout=timeout) if timeout else queue.get_nowait()
+            except Empty:
+                return changed
+            self._state.apply(message)
+            changed = True
+
+    def _poll(self) -> None:
+        if self._pool is None:
+            return
+
+        changed = self._drain()
+        finished = self._state.done >= self._state.total
+
+        if not finished and all(r.ready() for r in self._results):
+            # Every task returned; pick up any progress messages still in transit.
+            changed = self._drain(timeout=0.2) or changed
+            finished = True
+
+        if changed or finished:
+            self.state_updated.emit(self._state)
+        if finished:
+            self._finish()
+
+    def _finish(self) -> None:
+        self._timer.stop()
+        pool, self._pool = self._pool, None
+        if pool is not None:
+            pool.close()
+            pool.join()
+        self._queue = None
+        self.finished.emit(self._state)
 
 
 class MainWindow(QWidget):
@@ -38,6 +183,7 @@ class MainWindow(QWidget):
         self.setWindowTitle("Sound Optimizer")
         self.setMinimumSize(600, 400)
         self._processing_widget: ProcessingWidget | None = None
+        self._runner: _PoolRunner | None = None
         self._tasks: list[tuple[str, str]] = []
         self._is_processing = False
         self._build_ui()
@@ -63,6 +209,11 @@ class MainWindow(QWidget):
         self._select_button.clicked.connect(self._on_select_files)
         button_layout.addWidget(self._select_button)
 
+        self._select_folder_button = QPushButton("Select Folder")
+        self._select_folder_button.setMinimumHeight(40)
+        self._select_folder_button.clicked.connect(self._on_select_folder)
+        button_layout.addWidget(self._select_folder_button)
+
         self._start_button = QPushButton("Start Processing")
         self._start_button.setMinimumHeight(40)
         self._start_button.setEnabled(False)
@@ -77,22 +228,46 @@ class MainWindow(QWidget):
         main_layout.addWidget(self._file_label)
 
         self._processing_widget = ProcessingWidget()
-        main_layout.addWidget(self._processing_widget)
+        main_layout.addWidget(self._processing_widget, 1)
+
+    def _set_tasks(self, tasks: list[tuple[str, str]]) -> None:
+        if not tasks:
+            QMessageBox.information(self, "No audio files", "No supported audio files were found.")
+            return
+        self._tasks = tasks
+        self._file_label.setText(f"{len(tasks)} file(s) selected - output goes to '{OUTPUT_ROOT}'")
+        self._file_label.setStyleSheet("")
+        self._start_button.setEnabled(True)
+        if self._processing_widget is not None:
+            self._processing_widget.reset()
 
     def _on_select_files(self) -> None:
         files, _ = QFileDialog.getOpenFileNames(
             self,
             "Select Audio Files",
-            "",
-            f"Audio Files ({' '.join(SUPPORTED)});;All Files (*)",
+            os.path.abspath(INPUT_ROOT),
+            _file_dialog_filter(),
         )
         if not files:
             return
+        self._set_tasks(_build_tasks(files, INPUT_ROOT))
 
-        self._tasks = [(f, os.path.join(OUTPUT_ROOT, os.path.basename(f))) for f in files]
-        self._file_label.setText(f"{len(self._tasks)} file(s) selected")
-        self._file_label.setStyleSheet("")
-        self._start_button.setEnabled(True)
+    def _on_select_folder(self) -> None:
+        folder = QFileDialog.getExistingDirectory(
+            self,
+            "Select Folder With Audio Files",
+            os.path.abspath(INPUT_ROOT),
+        )
+        if not folder:
+            return
+        folder = os.path.normpath(folder)
+        self._set_tasks(_build_tasks(_scan_folder(folder), folder))
+
+    def _set_busy(self, busy: bool) -> None:
+        self._is_processing = busy
+        self._select_button.setEnabled(not busy)
+        self._select_folder_button.setEnabled(not busy)
+        self._start_button.setEnabled(not busy and bool(self._tasks))
 
     def _on_start_processing(self) -> None:
         if not self._tasks or self._is_processing:
@@ -102,96 +277,51 @@ class MainWindow(QWidget):
             QMessageBox.critical(
                 self,
                 "FFmpeg Required",
-                "FFmpeg is not installed or not found in PATH.\n"
-                "Please install FFmpeg to continue.",
+                "FFmpeg is not installed or not found in PATH.\nPlease install FFmpeg to continue.",
             )
             return
 
-        self._is_processing = True
-        self._start_button.setEnabled(False)
-        self._select_button.setEnabled(False)
+        self._set_busy(True)
         self._file_label.setText("Processing...")
+        if self._processing_widget is not None:
+            self._processing_widget.reset()
 
-        self._processing_worker = _ProcessingWorker(self._tasks)
-        self._processing_worker.state_updated.connect(self._on_state_updated)
-        self._processing_worker.finished.connect(self._on_processing_finished)
-        self._processing_worker.start_processing()
+        self._runner = _PoolRunner(self._tasks, self)
+        self._runner.state_updated.connect(self._on_state_updated)
+        self._runner.finished.connect(self._on_processing_finished)
+        self._runner.start()
 
     def _on_state_updated(self, state: ProcessingState) -> None:
         if self._processing_widget is not None:
             self._processing_widget.update_state(state)
 
-    def _on_processing_finished(self) -> None:
-        self._is_processing = False
-        self._start_button.setEnabled(True)
-        self._select_button.setEnabled(True)
-        if self._processing_widget is not None:
-            self._processing_widget.reset()
+    def _on_processing_finished(self, state: ProcessingState) -> None:
+        summary = f"Processing done. OK: {state.ok} | Skipped: {state.skipped} | Failed: {state.failed}"
+        logger.info(summary)
+        # Keep the final progress/status visible; it is cleared when a new selection is made.
+        self._file_label.setText(summary)
+        self._set_busy(False)
+        if self._runner is not None:
+            self._runner.deleteLater()
+            self._runner = None
 
-
-class _ProcessingWorker(QTimer):
-    """Background worker that runs the processing pool and emits state updates."""
-
-    def __init__(self, tasks: list[tuple[str, str]]) -> None:
-        super().__init__()
-        self._tasks = tasks
-        self._state = ProcessingState(total=len(tasks))
-        self._pool: Pool | None = None
-        self._queue: Any = None
-        self._slot_counter: Any = None
-        self._results: list[Any] = []
-
-        self.timeout.connect(self._on_timeout)
-
-    def start_processing(self) -> None:
-        self._slot_counter = Value("i", 0)
-        self._queue = Queue()
-        self._state = ProcessingState(total=len(self._tasks))
-
-        workers = max(1, cpu_count() - 1)
-        self._pool = Pool(
-            workers,
-            initializer=_init_worker,
-            initargs=(self._slot_counter, self._queue),
-        )
-        self._results = [self._pool.apply_async(process_audio, (task,)) for task in self._tasks]
-
-        self.start(100)
-
-    def _on_timeout(self) -> None:
-        if self._pool is None or self._queue is None:
-            return
-
-        while True:
-            try:
-                message = self._queue.get(timeout=0.01)
-                self._state.apply(message)
-            except Empty:
-                break
-
-        if self._state.done < self._state.total and all(r.ready() for r in self._results):
-            self.stop()
-            if self._pool is not None:
-                self._pool.terminate()
-                self._pool.join()
-            return
-
-        if self._state.done >= self._state.total:
-            self.stop()
-            if self._pool is not None:
-                self._pool.terminate()
-                self._pool.join()
-
-
-def _init_worker(counter: Value, progress_queue: Any) -> None:
-    global _worker_slot, _progress_queue
-    _progress_queue = progress_queue
-    with counter.get_lock():
-        _worker_slot = counter.value
-        counter.value += 1
+    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
+        if self._runner is not None:
+            answer = QMessageBox.question(
+                self,
+                "Processing in progress",
+                "Processing is still running. Stop it and quit?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                event.ignore()
+                return
+            self._runner.shutdown()
+            self._runner = None
+        event.accept()
 
 
 def create_app() -> MainWindow:
     """Factory function to create and return the main application window."""
-    app = MainWindow()
-    return app
+    return MainWindow()
