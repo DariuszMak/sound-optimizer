@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from typing import cast
 
 
 @dataclass
@@ -30,13 +31,18 @@ class ProcessingState:
             return 0.0
         return (self.elapsed / self.done) * (self.total - self.done)
 
-    def apply(self, message: tuple) -> None:
+    def apply(self, message: tuple[object, ...]) -> None:
         if message[0] == "step":
             _, worker_id, file_name, step, description, details = message
-            self.workers[worker_id] = (file_name, step, description, details)
+            self.workers[int(cast("int", worker_id))] = (
+                str(file_name),
+                int(cast("int", step)),
+                str(description),
+                str(details),
+            )
         elif message[0] == "done":
             _, worker_id, file_name, status = message
-            self.workers.pop(worker_id, None)
+            self.workers.pop(int(cast("int", worker_id)), None)
             self.done += 1
             if status == "ok":
                 self.ok += 1
