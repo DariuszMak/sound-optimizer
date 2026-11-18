@@ -21,10 +21,6 @@ from PySide6.QtWidgets import (
 from src.frontend.processing.processing_state import ProcessingState
 from src.frontend.widgets.processing_widget import ProcessingWidget
 
-# NOTE: ``_init_worker`` MUST be the one from ``src.main``: it sets the module-level
-# ``_worker_slot`` / ``_progress_queue`` globals that ``process_audio`` reads through
-# ``_emit``. A copy defined in this module would set globals nobody reads, and the
-# GUI would never receive any progress messages.
 from src.main import (
     EXCLUDED_DIRS,
     INPUT_ROOT,
@@ -51,7 +47,7 @@ def _output_path(input_path: str, base_dir: str) -> str:
 
     try:
         relative_path = os.path.relpath(input_path, base_dir)
-    except ValueError:  # e.g. different drives on Windows
+    except ValueError:
         relative_path = os.path.basename(input_path)
     if relative_path == os.pardir or relative_path.startswith(os.pardir + os.sep):
         relative_path = os.path.basename(input_path)
@@ -68,7 +64,6 @@ def _build_tasks(input_paths: list[str], base_dir: str) -> list[tuple[str, str]]
             continue
         output_path = _output_path(input_path, base_dir)
 
-        # Two inputs with the same name in different folders must not overwrite each other.
         stem, ext = os.path.splitext(output_path)
         counter = 2
         while output_path in used_outputs:
@@ -89,8 +84,8 @@ def _scan_folder(folder: str) -> list[str]:
 
 
 class _PoolRunner(QObject):
-    state_updated = Signal(object)  # ProcessingState
-    finished = Signal(object)  # ProcessingState
+    state_updated = Signal(object)
+    finished = Signal(object)
 
     def __init__(self, tasks: list[tuple[str, str]], parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -154,7 +149,6 @@ class _PoolRunner(QObject):
         finished = self._state.done >= self._state.total
 
         if not finished and all(r.ready() for r in self._results):
-            # Every task returned; pick up any progress messages still in transit.
             changed = self._drain(timeout=0.2) or changed
             finished = True
 
@@ -294,7 +288,6 @@ class MainWindow(QWidget):
     def _on_processing_finished(self, state: ProcessingState) -> None:
         summary = f"Processing done. OK: {state.ok} | Skipped: {state.skipped} | Failed: {state.failed}"
         logger.info(summary)
-        # Keep the final progress/status visible; it is cleared when a new selection is made.
         self._file_label.setText(summary)
         self._set_busy(False)
         if self._runner is not None:

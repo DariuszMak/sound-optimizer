@@ -155,7 +155,6 @@ class ProcessingWidget(QWidget):
         if running and not self._update_timer.isActive():
             self._update_timer.start()
         elif not running and self._update_timer.isActive():
-            # Batch finished: freeze the elapsed time instead of ticking forever.
             self._update_timer.stop()
 
     def reset(self) -> None:
