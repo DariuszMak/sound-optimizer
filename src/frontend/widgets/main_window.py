@@ -6,32 +6,16 @@ from multiprocessing import Pool, Queue, Value, cpu_count
 from queue import Empty
 from typing import Any
 
+import psutil
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QCloseEvent, QFont
-from PySide6.QtWidgets import (
-    QFileDialog,
-    QHBoxLayout,
-    QLabel,
-    QMessageBox,
-    QPushButton,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget
 
 from src.frontend.processing.processing_state import ProcessingState
 from src.frontend.widgets.processing_widget import ProcessingWidget
-from src.main import (
-    EXCLUDED_DIRS,
-    INPUT_ROOT,
-    OUTPUT_ROOT,
-    SUPPORTED,
-    _init_worker,
-    check_ffmpeg_installed,
-    process_audio,
-)
+from src.main import EXCLUDED_DIRS, INPUT_ROOT, OUTPUT_ROOT, SUPPORTED, _init_worker, check_ffmpeg_installed, process_audio
 
 logger = logging.getLogger(__name__)
-
 _POLL_INTERVAL_MS = 100
 
 
@@ -61,14 +45,12 @@ def _build_tasks(input_paths: list[str], base_dir: str) -> list[tuple[str, str]]
         if not input_path.lower().endswith(SUPPORTED):
             continue
         output_path = _output_path(input_path, base_dir)
-
         stem, ext = os.path.splitext(output_path)
         counter = 2
         while output_path in used_outputs:
             output_path = f"{stem}_{counter}{ext}"
             counter += 1
         used_outputs.add(output_path)
-
         tasks.append((input_path, output_path))
     return tasks
 
@@ -84,6 +66,8 @@ def _scan_folder(folder: str) -> list[str]:
 class _PoolRunner(QObject):
     state_updated = Signal(object)
     finished = Signal(object)
+    pause_state_changed = Signal(bool)
+    pause_failed = Signal(str)
 
     def __init__(self, tasks: list[tuple[str, str]], parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -93,7 +77,7 @@ class _PoolRunner(QObject):
         self._queue: Any = None
         self._results: list[Any] = []
         self._is_paused = False
-
+        self._suspended_trees: list[tuple[psutil.Process, list[psutil.Process]]] = []
         self._timer = QTimer(self)
         self._timer.setInterval(_POLL_INTERVAL_MS)
         self._timer.timeout.connect(self._poll)
@@ -102,65 +86,143 @@ class _PoolRunner(QObject):
     def state(self) -> ProcessingState:
         return self._state
 
+    def _worker_processes(self) -> list[psutil.Process]:
+        if self._pool is None:
+            return []
+        return [psutil.Process(worker.pid) for worker in self._pool._pool if worker.pid is not None and worker.is_alive()]
+
+    def _suspend_process_tree(self) -> None:
+        trees: list[tuple[psutil.Process, list[psutil.Process]]] = []
+        try:
+            for worker in self._worker_processes():
+                try:
+                    worker.suspend()
+                except psutil.NoSuchProcess:
+                    continue
+                tree_entry: tuple[psutil.Process, list[psutil.Process]] = (worker, [])
+                trees.append(tree_entry)
+                children: list[psutil.Process] = []
+                try:
+                    children = worker.children(recursive=True)
+                except psutil.NoSuchProcess:
+                    pass
+                suspended_children: list[psutil.Process] = []
+                for child in reversed(children):
+                    try:
+                        child.suspend()
+                        suspended_children.append(child)
+                    except psutil.NoSuchProcess:
+                        continue
+                tree_entry[1].extend(reversed(suspended_children))
+        except Exception:
+            self._resume_process_trees(trees)
+            raise
+        self._suspended_trees = trees
+
+    @staticmethod
+    def _resume_process_trees(trees: list[tuple[psutil.Process, list[psutil.Process]]]) -> None:
+        errors: list[str] = []
+        for worker, children in trees:
+            for child in children:
+                try:
+                    child.resume()
+                except psutil.NoSuchProcess:
+                    continue
+                except psutil.Error as exc:
+                    errors.append(str(exc))
+            try:
+                worker.resume()
+            except psutil.NoSuchProcess:
+                continue
+            except psutil.Error as exc:
+                errors.append(str(exc))
+        if errors:
+            raise RuntimeError("; ".join(errors))
+
     def set_paused(self, paused: bool) -> None:
-        self._is_paused = paused
+        if self._pool is None or paused == self._is_paused:
+            return
         if paused:
-            self._timer.stop()
+            try:
+                self._suspend_process_tree()
+            except Exception as exc:
+                logger.exception("Unable to suspend processing workers")
+                self.pause_failed.emit(f"Could not pause processing: {exc}")
+                return
+            self._is_paused = True
+            self._state.pause()
         else:
-            self._timer.start()
+            try:
+                self._resume_process_trees(self._suspended_trees)
+            except Exception as exc:
+                logger.exception("Unable to resume processing workers")
+                self.pause_failed.emit(f"Could not resume processing: {exc}")
+                return
+            self._suspended_trees.clear()
+            self._is_paused = False
+            self._state.resume()
+        self.pause_state_changed.emit(self._is_paused)
+        self.state_updated.emit(self._state)
 
     def start(self) -> None:
         slot_counter = Value("i", 0)
         self._queue = Queue()
         self._state = ProcessingState(total=len(self._tasks))
         self._is_paused = False
-
-        workers = max(1, cpu_count() - 1)
-        self._pool = Pool(
-            workers,
-            initializer=_init_worker,
-            initargs=(slot_counter, self._queue),
-        )
+        workers = max(1, min(cpu_count() - 1, len(self._tasks)))
+        self._pool = Pool(workers, initializer=_init_worker, initargs=(slot_counter, self._queue))
         self._results = [self._pool.apply_async(process_audio, (task,)) for task in self._tasks]
-
         self.state_updated.emit(self._state)
         self._timer.start()
 
     def shutdown(self) -> None:
         self._timer.stop()
         pool, self._pool = self._pool, None
+        if self._is_paused:
+            try:
+                self._resume_process_trees(self._suspended_trees)
+            except Exception:
+                logger.exception("Unable to resume workers before pool shutdown")
+            self._suspended_trees.clear()
+            self._is_paused = False
         if pool is not None:
             pool.terminate()
             pool.join()
         self._queue = None
 
     def _drain(self, timeout: float | None = None) -> bool:
-        queue = self._queue
-        if queue is None:
+        if self._queue is None:
             return False
         changed = False
         while True:
             try:
-                message = queue.get(timeout=timeout) if timeout else queue.get_nowait()
+                message = self._queue.get(timeout=timeout) if timeout else self._queue.get_nowait()
             except Empty:
                 return changed
             self._state.apply(message)
             changed = True
 
     def _poll(self) -> None:
-        if self._pool is None or self._is_paused:
+        if self._pool is None:
             return
-
         changed = self._drain()
         finished = self._state.done >= self._state.total
-
-        if not finished and all(r.ready() for r in self._results):
+        if not finished and all(result.ready() for result in self._results):
             changed = self._drain(timeout=0.2) or changed
-            finished = True
-
+            finished = self._state.done >= self._state.total
         if changed or finished:
             self.state_updated.emit(self._state)
         if finished:
+            if self._is_paused:
+                try:
+                    self._resume_process_trees(self._suspended_trees)
+                except Exception:
+                    logger.exception("Unable to resume workers before finishing")
+                    return
+                self._suspended_trees.clear()
+                self._is_paused = False
+                self._state.resume()
+                self.pause_state_changed.emit(False)
             self._finish()
 
     def _finish(self) -> None:
@@ -185,46 +247,38 @@ class MainWindow(QWidget):
         self._build_ui()
 
     def _build_ui(self) -> None:
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(16, 16, 16, 16)
-        main_layout.setSpacing(12)
-
-        title_label = QLabel("Sound Optimizer")
-        title_label.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        main_layout.addWidget(title_label)
-
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(12)
+        title = QLabel("Sound Optimizer")
+        title.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title)
         subtitle = QLabel("Batch audio file normalization and processing")
         subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
         subtitle.setWordWrap(True)
-        main_layout.addWidget(subtitle)
-
-        button_layout = QHBoxLayout()
+        layout.addWidget(subtitle)
+        buttons = QHBoxLayout()
         self._select_button = QPushButton("Select Audio Files")
         self._select_button.setMinimumHeight(40)
         self._select_button.clicked.connect(self._on_select_files)
-        button_layout.addWidget(self._select_button)
-
+        buttons.addWidget(self._select_button)
         self._select_folder_button = QPushButton("Select Folder")
         self._select_folder_button.setMinimumHeight(40)
         self._select_folder_button.clicked.connect(self._on_select_folder)
-        button_layout.addWidget(self._select_folder_button)
-
+        buttons.addWidget(self._select_folder_button)
         self._start_button = QPushButton("Start Processing")
         self._start_button.setMinimumHeight(40)
         self._start_button.setEnabled(False)
         self._start_button.clicked.connect(self._on_start_processing)
-        button_layout.addWidget(self._start_button)
-
-        main_layout.addLayout(button_layout)
-
+        buttons.addWidget(self._start_button)
+        layout.addLayout(buttons)
         self._file_label = QLabel("No files selected")
         self._file_label.setWordWrap(True)
         self._file_label.setStyleSheet("color: gray;")
-        main_layout.addWidget(self._file_label)
-
+        layout.addWidget(self._file_label)
         self._processing_widget = ProcessingWidget()
-        main_layout.addWidget(self._processing_widget, 1)
+        layout.addWidget(self._processing_widget, 1)
 
     def _set_tasks(self, tasks: list[tuple[str, str]]) -> None:
         if not tasks:
@@ -238,26 +292,15 @@ class MainWindow(QWidget):
             self._processing_widget.reset()
 
     def _on_select_files(self) -> None:
-        files, _ = QFileDialog.getOpenFileNames(
-            self,
-            "Select Audio Files",
-            os.path.abspath(INPUT_ROOT),
-            _file_dialog_filter(),
-        )
-        if not files:
-            return
-        self._set_tasks(_build_tasks(files, INPUT_ROOT))
+        files, _ = QFileDialog.getOpenFileNames(self, "Select Audio Files", os.path.abspath(INPUT_ROOT), _file_dialog_filter())
+        if files:
+            self._set_tasks(_build_tasks(files, INPUT_ROOT))
 
     def _on_select_folder(self) -> None:
-        folder = QFileDialog.getExistingDirectory(
-            self,
-            "Select Folder With Audio Files",
-            os.path.abspath(INPUT_ROOT),
-        )
-        if not folder:
-            return
-        folder = os.path.normpath(folder)
-        self._set_tasks(_build_tasks(_scan_folder(folder), folder))
+        folder = QFileDialog.getExistingDirectory(self, "Select Folder With Audio Files", os.path.abspath(INPUT_ROOT))
+        if folder:
+            folder = os.path.normpath(folder)
+            self._set_tasks(_build_tasks(_scan_folder(folder), folder))
 
     def _set_busy(self, busy: bool) -> None:
         self._is_processing = busy
@@ -268,26 +311,26 @@ class MainWindow(QWidget):
     def _on_start_processing(self) -> None:
         if not self._tasks or self._is_processing:
             return
-
         if not check_ffmpeg_installed():
-            QMessageBox.critical(
-                self,
-                "FFmpeg Required",
-                "FFmpeg is not installed or not found in PATH.\nPlease install FFmpeg to continue.",
-            )
+            QMessageBox.critical(self, "FFmpeg Required", "FFmpeg is not installed or not found in PATH.\\nPlease install FFmpeg to continue.")
             return
-
         self._set_busy(True)
         self._file_label.setText("Processing...")
         if self._processing_widget is not None:
             self._processing_widget.reset()
-
         self._runner = _PoolRunner(self._tasks, self)
         self._runner.state_updated.connect(self._on_state_updated)
         self._runner.finished.connect(self._on_processing_finished)
         if self._processing_widget is not None:
             self._processing_widget.pause_toggled.connect(self._runner.set_paused)
+            self._runner.pause_state_changed.connect(self._processing_widget.set_paused)
+            self._runner.pause_failed.connect(self._on_pause_failed)
         self._runner.start()
+
+    def _on_pause_failed(self, message: str) -> None:
+        if self._processing_widget is not None:
+            self._processing_widget.set_pause_pending(False)
+        QMessageBox.warning(self, "Pause / Resume Failed", message)
 
     def _on_state_updated(self, state: ProcessingState) -> None:
         if self._processing_widget is not None:
@@ -304,13 +347,7 @@ class MainWindow(QWidget):
 
     def closeEvent(self, event: QCloseEvent) -> None:  # ruff: ignore[invalid-function-name]
         if self._runner is not None:
-            answer = QMessageBox.question(
-                self,
-                "Processing in progress",
-                "Processing is still running. Stop it and quit?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
-            )
+            answer = QMessageBox.question(self, "Processing in progress", "Processing is still running. Stop it and quit?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
             if answer != QMessageBox.StandardButton.Yes:
                 event.ignore()
                 return
