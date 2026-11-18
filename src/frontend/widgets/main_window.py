@@ -20,7 +20,6 @@ from PySide6.QtWidgets import (
 
 from src.frontend.processing.processing_state import ProcessingState
 from src.frontend.widgets.processing_widget import ProcessingWidget
-
 from src.main import (
     EXCLUDED_DIRS,
     INPUT_ROOT,
