@@ -219,3 +219,23 @@ def test_close_event_with_runner_no(qtbot: QtBot, monkeypatch: pytest.MonkeyPatc
     window.closeEvent(event)
     event.ignore.assert_called_once()
     mock_runner.shutdown.assert_not_called()
+
+ 
+def test_pool_runner_pause_resume() -> None:
+    tasks: list[tuple[str, str]] = [("in.mp3", "out.mp3")]
+    runner = _PoolRunner(tasks)
+    
+    with patch("src.frontend.widgets.main_window.QTimer") as mock_timer_cls:
+        mock_timer = MagicMock()
+        mock_timer_cls.return_value = mock_timer
+        
+        runner.start()
+        mock_timer.start.assert_called_once()
+        
+        runner.set_paused(True)
+        assert runner._is_paused is True
+        mock_timer.stop.assert_called_once()
+        
+        runner.set_paused(False)
+        assert runner._is_paused is False
+        mock_timer.start.assert_called()
