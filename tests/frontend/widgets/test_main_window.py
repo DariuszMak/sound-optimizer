@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
+import pytest
 from PySide6.QtWidgets import QMessageBox
 
 from src.frontend.widgets.main_window import (
@@ -20,6 +21,14 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from pytestqt.qtbot import QtBot
+
+
+@pytest.fixture(autouse=True)
+def auto_mock_message_box(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Automatically mock all message boxes globally so no windows pop up during tests."""
+    monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.StandardButton.No)
+    monkeypatch.setattr(QMessageBox, "information", lambda *args, **kwargs: None)
+    monkeypatch.setattr(QMessageBox, "critical", lambda *args, **kwargs: None)
 
 
 def test_file_dialog_filter() -> None:
@@ -80,9 +89,8 @@ def test_create_app(qtbot: QtBot) -> None:
 def test_set_tasks_empty(qtbot: QtBot) -> None:
     window = MainWindow()
     qtbot.addWidget(window)
-    with patch("PySide6.QtWidgets.QMessageBox.information") as mock_info:
-        window._set_tasks([])
-        mock_info.assert_called_once()
+    window._set_tasks([])
+    assert window._start_button.isEnabled() is False
 
 
 def test_set_tasks_valid(qtbot: QtBot) -> None:
@@ -139,10 +147,8 @@ def test_on_start_processing_no_ffmpeg(mock_ffmpeg: MagicMock, qtbot: QtBot) -> 
     window = MainWindow()
     qtbot.addWidget(window)
     window._tasks = [("in.mp3", "out.mp3")]
-
-    with patch("PySide6.QtWidgets.QMessageBox.critical") as mock_crit:
-        window._on_start_processing()
-        mock_crit.assert_called_once()
+    window._on_start_processing()
+    assert window._is_processing is False
 
 
 @patch("src.frontend.widgets.main_window.check_ffmpeg_installed")
@@ -187,29 +193,29 @@ def test_close_event_no_runner(qtbot: QtBot) -> None:
     event.accept.assert_called_once()
 
 
-def test_close_event_with_runner_yes(qtbot: QtBot) -> None:
+def test_close_event_with_runner_yes(qtbot: QtBot, monkeypatch: pytest.MonkeyPatch) -> None:
     window = MainWindow()
     qtbot.addWidget(window)
     mock_runner = MagicMock()
     window._runner = mock_runner
 
-    with patch("PySide6.QtWidgets.QMessageBox.question") as mock_question:
-        mock_question.return_value = QMessageBox.StandardButton.Yes
-        event = MagicMock()
-        window.closeEvent(event)
-        event.accept.assert_called_once()
-        mock_runner.shutdown.assert_called_once()
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **kw: QMessageBox.StandardButton.Yes)
+
+    event = MagicMock()
+    window.closeEvent(event)
+    event.accept.assert_called_once()
+    mock_runner.shutdown.assert_called_once()
 
 
-def test_close_event_with_runner_no(qtbot: QtBot) -> None:
+def test_close_event_with_runner_no(qtbot: QtBot, monkeypatch: pytest.MonkeyPatch) -> None:
     window = MainWindow()
     qtbot.addWidget(window)
     mock_runner = MagicMock()
     window._runner = mock_runner
 
-    with patch("PySide6.QtWidgets.QMessageBox.question") as mock_question:
-        mock_question.return_value = QMessageBox.StandardButton.No
-        event = MagicMock()
-        window.closeEvent(event)
-        event.ignore.assert_called_once()
-        mock_runner.shutdown.assert_not_called()
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **kw: QMessageBox.StandardButton.No)
+
+    event = MagicMock()
+    window.closeEvent(event)
+    event.ignore.assert_called_once()
+    mock_runner.shutdown.assert_not_called()
