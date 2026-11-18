@@ -307,7 +307,6 @@ def test_main() -> None:
         patch("src.main.check_ffmpeg_installed", return_value=True),
         patch("src.main.QApplication") as mock_app_cls,
         patch("src.frontend.widgets.main_window.MainWindow") as mock_window,
-        patch("src.main.wait_for_keypress") as mock_wait,
         patch("sys.exit"),
     ):
         mock_app = MagicMock()
@@ -321,7 +320,6 @@ def test_main() -> None:
     window = mock_window.return_value
     window.show.assert_called_once()
     mock_app.exec.assert_called_once()
-    mock_wait.assert_called_once()
 
 
 def test_main_missing_ffmpeg() -> None:
@@ -330,70 +328,12 @@ def test_main_missing_ffmpeg() -> None:
         patch("src.main.check_ffmpeg_installed", return_value=False) as mock_check,
         patch("src.main.collect_audio_files") as mock_collect,
         patch("src.main.Pool") as mock_pool,
-        patch("src.main.wait_for_keypress") as mock_wait,
     ):
         main()
 
         mock_check.assert_called_once()
         mock_collect.assert_not_called()
         mock_pool.assert_not_called()
-        mock_wait.assert_called_once()
-
-
-def test_wait_for_keypress_non_interactive() -> None:
-
-    with (
-        patch("src.main.sys.stdin.isatty", return_value=False),
-        patch("src.main.os.name", "nt"),
-    ):
-        main_module.wait_for_keypress()
-
-
-def test_wait_for_keypress_windows(monkeypatch: pytest.MonkeyPatch) -> None:
-
-    import sys
-    import types
-
-    mock_msvcrt = types.ModuleType("msvcrt")
-    mock_msvcrt.getch = MagicMock(return_value=b"x")  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "msvcrt", mock_msvcrt)
-
-    with (
-        patch("src.main.sys.stdin.isatty", return_value=True),
-        patch("src.main.os.name", "nt"),
-    ):
-        main_module.wait_for_keypress()
-
-    mock_msvcrt.getch.assert_called_once()
-
-
-def test_wait_for_keypress_posix(monkeypatch: pytest.MonkeyPatch) -> None:
-
-    import sys
-    import types
-
-    mock_termios = types.ModuleType("termios")
-    mock_termios.tcgetattr = MagicMock(return_value=["old_settings"])  # type: ignore[attr-defined]
-    mock_termios.tcsetattr = MagicMock()  # type: ignore[attr-defined]
-    mock_termios.TCSADRAIN = 1  # type: ignore[attr-defined]
-
-    mock_tty = types.ModuleType("tty")
-    mock_tty.setraw = MagicMock()  # type: ignore[attr-defined]
-
-    monkeypatch.setitem(sys.modules, "termios", mock_termios)
-    monkeypatch.setitem(sys.modules, "tty", mock_tty)
-
-    with (
-        patch("src.main.sys.stdin.isatty", return_value=True),
-        patch("src.main.sys.stdin.fileno", return_value=0),
-        patch("src.main.sys.stdin.read", return_value="x") as mock_read,
-        patch("src.main.os.name", "posix"),
-    ):
-        main_module.wait_for_keypress()
-
-    mock_tty.setraw.assert_called_once_with(0)
-    mock_read.assert_called_once_with(1)
-    mock_termios.tcsetattr.assert_called_once_with(0, 1, ["old_settings"])
 
 
 def test_format_loudness_params() -> None:

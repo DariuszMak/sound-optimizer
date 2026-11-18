@@ -280,33 +280,6 @@ def check_ffmpeg_installed() -> bool:
     return True
 
 
-def wait_for_keypress() -> None:
-    if not sys.stdin.isatty():
-        return
-
-    logger.info("Press any key to continue...")
-
-    try:
-        if os.name == "nt":
-            import msvcrt
-
-            msvcrt.getch()
-        else:
-            import termios
-            import tty
-
-            fd = sys.stdin.fileno()
-            old_settings = termios.tcgetattr(fd)  # type: ignore[attr-defined]
-            try:
-                tty.setraw(fd)  # type: ignore[attr-defined]
-                sys.stdin.read(1)
-            finally:
-                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)  # type: ignore[attr-defined]
-    except Exception:
-        with contextlib.suppress(Exception):
-            input()
-
-
 def load_audio(path: str) -> tuple[Float32Array | None, int | None]:
     try:
         audio = AudioSegment.from_file(path)
@@ -567,7 +540,7 @@ def main() -> None:
 
         sys.exit(app.exec())
     finally:
-        wait_for_keypress()
+        logger.info("Main function closed")
 
 
 if __name__ == "__main__":
