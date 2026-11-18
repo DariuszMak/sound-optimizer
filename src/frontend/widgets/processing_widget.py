@@ -12,6 +12,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from pytestqt.qtbot import QtBot
+
 from src.frontend.processing.processing_state import ProcessingState
 from src.main import NUMBER_OF_STEPS
 
