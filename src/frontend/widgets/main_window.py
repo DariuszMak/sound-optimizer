@@ -43,7 +43,6 @@ def _file_dialog_filter() -> str:
 
 
 def _output_path(input_path: str, base_dir: str) -> str:
-
     try:
         relative_path = os.path.relpath(input_path, base_dir)
     except ValueError:
@@ -93,6 +92,7 @@ class _PoolRunner(QObject):
         self._pool: Any = None
         self._queue: Any = None
         self._results: list[Any] = []
+        self._is_paused = False
 
         self._timer = QTimer(self)
         self._timer.setInterval(_POLL_INTERVAL_MS)
@@ -102,10 +102,18 @@ class _PoolRunner(QObject):
     def state(self) -> ProcessingState:
         return self._state
 
+    def set_paused(self, paused: bool) -> None:
+        self._is_paused = paused
+        if paused:
+            self._timer.stop()
+        else:
+            self._timer.start()
+
     def start(self) -> None:
         slot_counter = Value("i", 0)
         self._queue = Queue()
         self._state = ProcessingState(total=len(self._tasks))
+        self._is_paused = False
 
         workers = max(1, cpu_count() - 1)
         self._pool = Pool(
@@ -119,7 +127,6 @@ class _PoolRunner(QObject):
         self._timer.start()
 
     def shutdown(self) -> None:
-
         self._timer.stop()
         pool, self._pool = self._pool, None
         if pool is not None:
@@ -141,7 +148,7 @@ class _PoolRunner(QObject):
             changed = True
 
     def _poll(self) -> None:
-        if self._pool is None:
+        if self._pool is None or self._is_paused:
             return
 
         changed = self._drain()
@@ -278,6 +285,8 @@ class MainWindow(QWidget):
         self._runner = _PoolRunner(self._tasks, self)
         self._runner.state_updated.connect(self._on_state_updated)
         self._runner.finished.connect(self._on_processing_finished)
+        if self._processing_widget is not None:
+            self._processing_widget.pause_toggled.connect(self._runner.set_paused)
         self._runner.start()
 
     def _on_state_updated(self, state: ProcessingState) -> None:
@@ -311,5 +320,4 @@ class MainWindow(QWidget):
 
 
 def create_app() -> MainWindow:
-
     return MainWindow()
