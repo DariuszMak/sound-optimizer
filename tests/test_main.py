@@ -506,23 +506,6 @@ def test_smooth_gain_edge_cases(sample_rate: int) -> None:
     assert out_single[0] == pytest.approx(5.0)
 
 
-def test_limiter_edge_cases(sample_rate: int) -> None:
-    ceiling_db = -1.0
-    ceiling = 10 ** (ceiling_db / 20)
-
-    y_below = np.array([ceiling * 0.5, ceiling * 0.5], dtype=np.float32)
-    out_below = limiter(y_below, sample_rate, ceiling_db=ceiling_db)
-    np.testing.assert_array_almost_equal(out_below, y_below)
-
-    y_exact = np.array([ceiling, ceiling], dtype=np.float32)
-    out_exact = limiter(y_exact, sample_rate, ceiling_db=ceiling_db)
-    np.testing.assert_array_almost_equal(out_exact, y_exact)
-
-    y_short = np.array([ceiling * 2.0], dtype=np.float32)
-    out_short = limiter(y_short, sample_rate, ceiling_db=ceiling_db)
-    assert out_short[0] <= ceiling + 1e-5
-
-
 def test_export_audio_edge_cases(tmp_path: Path, sample_rate: int) -> None:
     y_mono = generate_sine_wave(duration_sec=0.1, sr=sample_rate)
     y_stereo = np.column_stack((y_mono, y_mono))
@@ -761,8 +744,7 @@ def test_process_audio_skipped_when_no_audio() -> None:
     # Test process_audio returns None when load_audio returns None
     # (status "failed" is emitted via _emit, not returned)
     with patch("src.main.load_audio", return_value=(None, None)):
-        result = process_audio(("input.wav", "output.mp3"))
-    assert result is None
+        assert process_audio(("input.wav", "output.mp3")) is None  # type: ignore[func-returns-value]
 
 
 def test_dynamic_loudness_control_edge_cases() -> None:
@@ -775,7 +757,7 @@ def test_dynamic_loudness_control_edge_cases() -> None:
     assert len(result) == len(mono)
 
     # Very quiet signal
-    quiet = mono * 0.001
+    quiet = (mono * 0.001).astype(np.float32)
     result_quiet = dynamic_loudness_control(quiet, 44100, -16.0)
     assert result_quiet is not None
 
@@ -790,7 +772,7 @@ def test_limiter_edge_cases() -> None:
     assert len(result) == len(mono)
 
     # Very loud signal
-    loud = mono * 10.0
+    loud = (mono * 10.0).astype(np.float32)
     result_loud = limiter(loud, 44100)
     assert result_loud is not None
 
@@ -805,8 +787,9 @@ def test_dashboard_rich_console_zero_total() -> None:
     dashboard = Dashboard(0)
     dashboard.apply(("step", 0, "file.wav", 1, "Loading", ""))
 
-    from rich.console import Console
     from io import StringIO
+
+    from rich.console import Console
 
     string_io = StringIO()
     console = Console(file=string_io, force_terminal=True, width=80)
@@ -867,7 +850,7 @@ def test_run_pool_loop_termination_with_results_ready() -> None:
 def test_process_audio_visualization_data() -> None:
     # Test that process_audio produces visualization data
     sine = generate_sine_wave(duration_sec=0.1, sr=44100)
-    audio_segment = AudioSegment(
+    AudioSegment(
         data=sine.tobytes(),
         frame_rate=44100,
         sample_width=sine.dtype.itemsize,
@@ -875,9 +858,7 @@ def test_process_audio_visualization_data() -> None:
     )
 
     with patch("src.main.load_audio", return_value=(sine.astype(np.float32), 44100)):
-        result = process_audio(("input.wav", "output.mp3"))
-    # process_audio returns None, status is emitted via _emit
-    assert result is None
+        assert process_audio(("input.wav", "output.mp3")) is None  # type: ignore[func-returns-value]
 
 
 def test_measure_lufs_zero_signal() -> None:
@@ -892,6 +873,7 @@ def test_measure_lufs_sine_wave() -> None:
     # Test _measure_lufs with sine wave
     sine = generate_sine_wave(duration_sec=1.0, sr=44100, amp=0.5)
     lufs = _measure_lufs(sine, 44100)
+    assert lufs is not None
     assert lufs > -30  # Should be reasonable LUFS for sine wave
 
 

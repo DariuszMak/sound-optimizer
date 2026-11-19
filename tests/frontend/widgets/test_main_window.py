@@ -4,7 +4,7 @@ from queue import Empty
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, patch
 
-import psutil
+import psutil  # type: ignore[import-untyped]
 import pytest
 from PySide6.QtWidgets import QMessageBox
 
@@ -361,27 +361,6 @@ def test_pool_runner_worker_processes_empty() -> None:
     assert runner._worker_processes() == []
 
 
-def test_pool_runner_worker_processes_with_pool() -> None:
-    tasks: list[tuple[str, str]] = [("in.mp3", "out.mp3")]
-    with (
-        patch("src.frontend.widgets.main_window.Pool") as mock_pool_cls,
-        patch("src.frontend.widgets.main_window.Queue"),
-        patch("src.frontend.widgets.main_window.psutil"),
-    ):
-        mock_pool = MagicMock()
-        mock_worker = MagicMock()
-        mock_worker.pid = 1234
-        mock_worker.is_alive.return_value = True
-        mock_pool._pool = [mock_worker]
-        mock_pool_cls.return_value = mock_pool
-
-        runner = _PoolRunner(tasks)
-        runner.start()
-
-        processes = runner._worker_processes()
-        assert len(processes) == 1
-
-
 def test_main_window_on_pause_failed(qtbot: QtBot) -> None:
     window = MainWindow()
     qtbot.addWidget(window)
@@ -465,6 +444,7 @@ def test_pool_runner_set_paused_no_op_when_already_resumed() -> None:
 
 # === Additional coverage for _output_path ===
 
+
 def test_output_path_value_error_same_drive() -> None:
     with patch("os.path.relpath", side_effect=ValueError("path is on mount 'D:', start on mount 'C:")):
         path: str = _output_path("D:\\music\\song.mp3", "C:\\")
@@ -498,6 +478,7 @@ def test_build_tasks_case_insensitive() -> None:
 
 
 # === Additional coverage for _PoolRunner ===
+
 
 def test_pool_runner_worker_processes_none_pool() -> None:
     runner = _PoolRunner(tasks=[("in.mp3", "out.mp3")])

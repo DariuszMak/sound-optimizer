@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from unittest.mock import MagicMock
+from unittest.mock import patch
 
 from src.frontend.processing.processing_state import ProcessingState
 from src.frontend.widgets.processing_widget import ProcessingWidget
@@ -266,11 +270,12 @@ def test_processing_widget_on_timer_no_total(qtbot: MagicMock) -> None:
     qtbot.addWidget(widget)
 
     widget._state = ProcessingState()
-    widget._update_display = MagicMock()
+    mock_update = patch.object(widget, "_update_display").start()
 
     widget._on_timer()
 
-    widget._update_display.assert_not_called()
+    mock_update.stop()
+    mock_update.assert_not_called()
 
 
 def test_processing_widget_on_timer_with_total(qtbot: MagicMock) -> None:
@@ -279,11 +284,12 @@ def test_processing_widget_on_timer_with_total(qtbot: MagicMock) -> None:
 
     state = ProcessingState(total=5, done=2)
     widget._state = state
-    widget._update_display = MagicMock()
+    mock_update = patch.object(widget, "_update_display").start()
 
     widget._on_timer()
 
-    widget._update_display.assert_called_once()
+    mock_update.stop()
+    mock_update.assert_called_once()
 
 
 def test_processing_widget_update_display_creates_workers(qtbot: MagicMock) -> None:
@@ -314,8 +320,7 @@ def test_processing_widget_reset_stops_timer(qtbot: MagicMock) -> None:
         stop_called.append(True)
         original_stop()
 
-    widget._update_timer.stop = mock_stop
-
-    widget.reset()
+    with patch.object(widget._update_timer, "stop", side_effect=mock_stop):
+        widget.reset()
 
     assert len(stop_called) == 1
