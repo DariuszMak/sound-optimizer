@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from unittest.mock import MagicMock
 
 from src.frontend.processing.processing_state import ProcessingState
 from src.frontend.widgets.processing_widget import ProcessingWidget
-
-if TYPE_CHECKING:
-    from unittest.mock import MagicMock
 
 
 def test_processing_widget_creates_with_defaults(qtbot: MagicMock) -> None:
@@ -232,3 +229,93 @@ def test_processing_widget_reset_clears_pause_state(qtbot: MagicMock) -> None:
     assert widget._pause_pending is False
     assert widget._pause_button.text() == "Pause"
     assert widget._pause_button.isEnabled() is False
+
+
+def test_processing_widget_on_pause_clicked_pending(qtbot: MagicMock) -> None:
+    widget = ProcessingWidget()
+    qtbot.addWidget(widget)
+
+    state = ProcessingState(total=5, done=2)
+    widget.update_state(state)
+    widget.set_pause_pending(True)
+
+    widget._on_pause_clicked()
+
+    assert widget._pause_pending is True
+
+
+def test_processing_widget_on_pause_clicked_not_pending(qtbot: MagicMock) -> None:
+    widget = ProcessingWidget()
+    qtbot.addWidget(widget)
+
+    state = ProcessingState(total=5, done=2)
+    widget.update_state(state)
+    widget.set_pause_pending(False)
+
+    signal_emitted: list[bool] = []
+    widget.pause_toggled.connect(signal_emitted.append)
+
+    widget._on_pause_clicked()
+
+    assert len(signal_emitted) == 1
+    assert signal_emitted[0] is True
+
+
+def test_processing_widget_on_timer_no_total(qtbot: MagicMock) -> None:
+    widget = ProcessingWidget()
+    qtbot.addWidget(widget)
+
+    widget._state = ProcessingState()
+    widget._update_display = MagicMock()
+
+    widget._on_timer()
+
+    widget._update_display.assert_not_called()
+
+
+def test_processing_widget_on_timer_with_total(qtbot: MagicMock) -> None:
+    widget = ProcessingWidget()
+    qtbot.addWidget(widget)
+
+    state = ProcessingState(total=5, done=2)
+    widget._state = state
+    widget._update_display = MagicMock()
+
+    widget._on_timer()
+
+    widget._update_display.assert_called_once()
+
+
+def test_processing_widget_update_display_creates_workers(qtbot: MagicMock) -> None:
+    widget = ProcessingWidget()
+    qtbot.addWidget(widget)
+
+    state = ProcessingState(total=5)
+    state.workers[0] = ("test.wav", 3, "Processing", "info")
+    widget.update_state(state)
+
+    assert 0 in widget._worker_widgets
+    worker_widget = widget._worker_widgets[0]
+    assert worker_widget._file_label.text() == "test.wav"
+
+
+def test_processing_widget_reset_stops_timer(qtbot: MagicMock) -> None:
+    widget = ProcessingWidget()
+    qtbot.addWidget(widget)
+
+    state = ProcessingState(total=5, done=2)
+    widget.update_state(state)
+    widget._update_timer.start()
+
+    stop_called = []
+    original_stop = widget._update_timer.stop
+
+    def mock_stop() -> None:
+        stop_called.append(True)
+        original_stop()
+
+    widget._update_timer.stop = mock_stop
+
+    widget.reset()
+
+    assert len(stop_called) == 1

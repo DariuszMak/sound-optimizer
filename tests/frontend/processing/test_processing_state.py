@@ -144,3 +144,23 @@ def test_processing_state_elapsed_with_pause() -> None:
     time.sleep(0.05)
     elapsed_after_resume = state.elapsed
     assert elapsed_after_resume - elapsed_during_pause > 0.04
+
+
+def test_processing_state_apply_done_with_all_statuses() -> None:
+    # Test that all three status branches in apply are covered
+    state = ProcessingState(total=5)
+
+    # ok status
+    state.apply(("done", 0, "file1.wav", "ok"))
+    assert state.done == 1
+    assert state.ok == 1
+
+    # skipped status
+    state.apply(("done", 1, "file2.wav", "skipped"))
+    assert state.done == 2
+    assert state.skipped == 1
+
+    # failed status
+    state.apply(("done", 2, "file3.wav", "failed"))
+    assert state.done == 3
+    assert state.failed == 1
