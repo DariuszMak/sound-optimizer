@@ -442,9 +442,6 @@ def test_pool_runner_set_paused_no_op_when_already_resumed() -> None:
         assert len(signal_emitted) == 0
 
 
-# === Additional coverage for _output_path ===
-
-
 def test_output_path_value_error_same_drive() -> None:
     with patch("os.path.relpath", side_effect=ValueError("path is on mount 'D:', start on mount 'C:")):
         path: str = _output_path("D:\\music\\song.mp3", "C:\\")
@@ -475,9 +472,6 @@ def test_build_tasks_all_filtered_out() -> None:
 def test_build_tasks_case_insensitive() -> None:
     tasks: list[tuple[str, str]] = _build_tasks(["/path/file.WAV"], "/path")
     assert len(tasks) == 1
-
-
-# === Additional coverage for _PoolRunner ===
 
 
 def test_pool_runner_worker_processes_none_pool() -> None:
@@ -760,8 +754,7 @@ def test_pool_runner_finish() -> None:
 
 
 def test_pool_runner_finish_while_paused() -> None:
-    # Test _finish when paused - _finish doesn't handle paused state directly,
-    # that's handled in _poll before calling _finish
+
     with (
         patch("src.frontend.widgets.main_window.QTimer") as mock_timer_cls,
         patch("src.frontend.widgets.main_window.Pool") as mock_pool_cls,
@@ -792,7 +785,7 @@ def test_pool_runner_finish_while_paused() -> None:
 
 
 def test_pool_runner_poll_finished_while_paused() -> None:
-    # Test _poll when all finished and paused - should resume and then finish
+
     with (
         patch("src.frontend.widgets.main_window.QTimer") as mock_timer_cls,
         patch("src.frontend.widgets.main_window.Pool") as mock_pool_cls,
@@ -948,7 +941,6 @@ def test_pool_runner_suspend_process_tree_with_children() -> None:
         mock_pool._pool = [mock_worker]
         mock_pool_cls.return_value = mock_pool
 
-        # Mock psutil.Process to return a mock that has the right attributes
         mock_proc = MagicMock()
         mock_proc.pid = 1234
         mock_proc.is_alive.return_value = True
@@ -957,7 +949,7 @@ def test_pool_runner_suspend_process_tree_with_children() -> None:
 
         runner = _PoolRunner(tasks=[("in.mp3", "out.mp3")])
         runner.start()
-        # Override the pool set by start() with our mock that has workers
+
         runner._pool = mock_pool
 
         runner._suspend_process_tree()
