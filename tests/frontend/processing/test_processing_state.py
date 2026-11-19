@@ -118,7 +118,6 @@ def test_processing_state_pause_twice() -> None:
 def test_processing_state_resume() -> None:
     state = ProcessingState()
     state.pause()
-    initial_paused_at = state.paused_at
     time.sleep(0.05)
     state.resume()
     assert state.is_paused is False

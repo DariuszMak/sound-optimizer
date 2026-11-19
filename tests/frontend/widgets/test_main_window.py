@@ -224,10 +224,11 @@ def test_close_event_with_runner_no(qtbot: QtBot, monkeypatch: pytest.MonkeyPatc
 
 def test_pool_runner_pause_resume() -> None:
     tasks: list[tuple[str, str]] = [("in.mp3", "out.mp3")]
-    with patch("src.frontend.widgets.main_window.QTimer") as mock_timer_cls, patch(
-        "src.frontend.widgets.main_window.Pool"
-    ) as mock_pool_cls, patch("src.frontend.widgets.main_window.Queue"), patch(
-        "src.frontend.widgets.main_window.psutil"
+    with (
+        patch("src.frontend.widgets.main_window.QTimer") as mock_timer_cls,
+        patch("src.frontend.widgets.main_window.Pool") as mock_pool_cls,
+        patch("src.frontend.widgets.main_window.Queue"),
+        patch("src.frontend.widgets.main_window.psutil"),
     ):
         mock_timer = MagicMock()
         mock_timer_cls.return_value = mock_timer
@@ -249,10 +250,11 @@ def test_pool_runner_pause_resume() -> None:
 
 def test_pool_runner_set_paused_emits_signal() -> None:
     tasks: list[tuple[str, str]] = [("in.mp3", "out.mp3")]
-    with patch("src.frontend.widgets.main_window.QTimer") as mock_timer_cls, patch(
-        "src.frontend.widgets.main_window.Pool"
-    ) as mock_pool_cls, patch("src.frontend.widgets.main_window.Queue"), patch(
-        "src.frontend.widgets.main_window.psutil"
+    with (
+        patch("src.frontend.widgets.main_window.QTimer") as mock_timer_cls,
+        patch("src.frontend.widgets.main_window.Pool") as mock_pool_cls,
+        patch("src.frontend.widgets.main_window.Queue"),
+        patch("src.frontend.widgets.main_window.psutil"),
     ):
         mock_timer = MagicMock()
         mock_timer_cls.return_value = mock_timer
@@ -272,10 +274,11 @@ def test_pool_runner_set_paused_emits_signal() -> None:
 
 def test_pool_runner_set_paused_emits_signal_on_resume() -> None:
     tasks: list[tuple[str, str]] = [("in.mp3", "out.mp3")]
-    with patch("src.frontend.widgets.main_window.QTimer") as mock_timer_cls, patch(
-        "src.frontend.widgets.main_window.Pool"
-    ) as mock_pool_cls, patch("src.frontend.widgets.main_window.Queue"), patch(
-        "src.frontend.widgets.main_window.psutil"
+    with (
+        patch("src.frontend.widgets.main_window.QTimer") as mock_timer_cls,
+        patch("src.frontend.widgets.main_window.Pool") as mock_pool_cls,
+        patch("src.frontend.widgets.main_window.Queue"),
+        patch("src.frontend.widgets.main_window.psutil"),
     ):
         mock_timer = MagicMock()
         mock_timer_cls.return_value = mock_timer
@@ -296,11 +299,12 @@ def test_pool_runner_set_paused_emits_signal_on_resume() -> None:
 
 def test_pool_runner_pause_failed_signal() -> None:
     tasks: list[tuple[str, str]] = [("in.mp3", "out.mp3")]
-    with patch("src.frontend.widgets.main_window.QTimer") as mock_timer_cls, patch(
-        "src.frontend.widgets.main_window.Pool"
-    ) as mock_pool_cls, patch("src.frontend.widgets.main_window.Queue"), patch(
-        "src.frontend.widgets.main_window.psutil"
-    ) as mock_psutil:
+    with (
+        patch("src.frontend.widgets.main_window.QTimer") as mock_timer_cls,
+        patch("src.frontend.widgets.main_window.Pool") as mock_pool_cls,
+        patch("src.frontend.widgets.main_window.Queue"),
+        patch("src.frontend.widgets.main_window.psutil") as mock_psutil,
+    ):
         mock_timer = MagicMock()
         mock_timer_cls.return_value = mock_timer
         mock_pool = MagicMock()
@@ -329,10 +333,11 @@ def test_pool_runner_pause_failed_signal() -> None:
 
 def test_pool_runner_shutdown_resumes_paused() -> None:
     tasks: list[tuple[str, str]] = [("in.mp3", "out.mp3")]
-    with patch("src.frontend.widgets.main_window.QTimer") as mock_timer_cls, patch(
-        "src.frontend.widgets.main_window.Pool"
-    ) as mock_pool_cls, patch("src.frontend.widgets.main_window.Queue"), patch(
-        "src.frontend.widgets.main_window.psutil"
+    with (
+        patch("src.frontend.widgets.main_window.QTimer") as mock_timer_cls,
+        patch("src.frontend.widgets.main_window.Pool") as mock_pool_cls,
+        patch("src.frontend.widgets.main_window.Queue"),
+        patch("src.frontend.widgets.main_window.psutil"),
     ):
         mock_timer = MagicMock()
         mock_timer_cls.return_value = mock_timer
@@ -355,9 +360,11 @@ def test_pool_runner_worker_processes_empty() -> None:
 
 def test_pool_runner_worker_processes_with_pool() -> None:
     tasks: list[tuple[str, str]] = [("in.mp3", "out.mp3")]
-    with patch("src.frontend.widgets.main_window.Pool") as mock_pool_cls, patch(
-        "src.frontend.widgets.main_window.Queue"
-    ), patch("src.frontend.widgets.main_window.psutil"):
+    with (
+        patch("src.frontend.widgets.main_window.Pool") as mock_pool_cls,
+        patch("src.frontend.widgets.main_window.Queue"),
+        patch("src.frontend.widgets.main_window.psutil"),
+    ):
         mock_pool = MagicMock()
         mock_worker = MagicMock()
         mock_worker.pid = 1234
@@ -406,10 +413,11 @@ def test_main_window_pause_connections(qtbot: QtBot) -> None:
 
 def test_pool_runner_set_paused_no_op_when_already_paused() -> None:
     tasks: list[tuple[str, str]] = [("in.mp3", "out.mp3")]
-    with patch("src.frontend.widgets.main_window.QTimer") as mock_timer_cls, patch(
-        "src.frontend.widgets.main_window.Pool"
-    ) as mock_pool_cls, patch("src.frontend.widgets.main_window.Queue"), patch(
-        "src.frontend.widgets.main_window.psutil"
+    with (
+        patch("src.frontend.widgets.main_window.QTimer") as mock_timer_cls,
+        patch("src.frontend.widgets.main_window.Pool") as mock_pool_cls,
+        patch("src.frontend.widgets.main_window.Queue"),
+        patch("src.frontend.widgets.main_window.psutil"),
     ):
         mock_timer = MagicMock()
         mock_timer_cls.return_value = mock_timer
@@ -429,10 +437,11 @@ def test_pool_runner_set_paused_no_op_when_already_paused() -> None:
 
 def test_pool_runner_set_paused_no_op_when_already_resumed() -> None:
     tasks: list[tuple[str, str]] = [("in.mp3", "out.mp3")]
-    with patch("src.frontend.widgets.main_window.QTimer") as mock_timer_cls, patch(
-        "src.frontend.widgets.main_window.Pool"
-    ) as mock_pool_cls, patch("src.frontend.widgets.main_window.Queue"), patch(
-        "src.frontend.widgets.main_window.psutil"
+    with (
+        patch("src.frontend.widgets.main_window.QTimer") as mock_timer_cls,
+        patch("src.frontend.widgets.main_window.Pool") as mock_pool_cls,
+        patch("src.frontend.widgets.main_window.Queue"),
+        patch("src.frontend.widgets.main_window.psutil"),
     ):
         mock_timer = MagicMock()
         mock_timer_cls.return_value = mock_timer
