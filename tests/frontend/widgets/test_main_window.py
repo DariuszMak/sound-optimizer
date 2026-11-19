@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -264,7 +264,7 @@ def test_pool_runner_set_paused_emits_signal() -> None:
         runner = _PoolRunner(tasks)
         runner.start()
 
-        signal_emitted = []
+        signal_emitted: list[Any] = []
         runner.pause_state_changed.connect(signal_emitted.append)
         runner.set_paused(True)
 
@@ -289,7 +289,7 @@ def test_pool_runner_set_paused_emits_signal_on_resume() -> None:
         runner.start()
         runner.set_paused(True)
 
-        signal_emitted = []
+        signal_emitted: list[Any] = []
         runner.pause_state_changed.connect(signal_emitted.append)
         runner.set_paused(False)
 
@@ -322,7 +322,7 @@ def test_pool_runner_pause_failed_signal() -> None:
         runner = _PoolRunner(tasks)
         runner.start()
 
-        signal_emitted = []
+        signal_emitted: list[Any] = []
         runner.pause_failed.connect(signal_emitted.append)
         runner.set_paused(True)
 
@@ -428,7 +428,7 @@ def test_pool_runner_set_paused_no_op_when_already_paused() -> None:
         runner.start()
         runner.set_paused(True)
 
-        signal_emitted = []
+        signal_emitted: list[Any] = []
         runner.pause_state_changed.connect(signal_emitted.append)
         runner.set_paused(True)
 
@@ -453,7 +453,7 @@ def test_pool_runner_set_paused_no_op_when_already_resumed() -> None:
         runner.set_paused(True)
         runner.set_paused(False)
 
-        signal_emitted = []
+        signal_emitted: list[Any] = []
         runner.pause_state_changed.connect(signal_emitted.append)
         runner.set_paused(False)
 

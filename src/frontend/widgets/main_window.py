@@ -7,7 +7,7 @@ from multiprocessing import Pool, Queue, Value, cpu_count
 from queue import Empty
 from typing import Any
 
-import psutil
+import psutil  # type: ignore[import-untyped]
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QCloseEvent, QFont
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget
