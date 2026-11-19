@@ -120,3 +120,115 @@ def test_processing_widget_status_label_no_eta_when_done(qtbot: MagicMock) -> No
 
     status = widget._status_label.text()
     assert "ETA" not in status
+
+
+def test_processing_widget_pause_button_initial_state(qtbot: MagicMock) -> None:
+    widget = ProcessingWidget()
+    qtbot.addWidget(widget)
+
+    assert widget._pause_button.isEnabled() is False
+    assert widget._pause_button.text() == "Pause"
+    assert widget._is_paused is False
+    assert widget._pause_pending is False
+
+
+def test_processing_widget_pause_button_enabled_when_running(qtbot: MagicMock) -> None:
+    widget = ProcessingWidget()
+    qtbot.addWidget(widget)
+
+    state = ProcessingState(total=5, done=2)
+    widget.update_state(state)
+
+    assert widget._pause_button.isEnabled() is True
+
+
+def test_processing_widget_pause_button_disabled_when_completed(qtbot: MagicMock) -> None:
+    widget = ProcessingWidget()
+    qtbot.addWidget(widget)
+
+    state = ProcessingState(total=5, done=5)
+    widget.update_state(state)
+
+    assert widget._pause_button.isEnabled() is False
+
+
+def test_processing_widget_set_paused_shows_resume(qtbot: MagicMock) -> None:
+    widget = ProcessingWidget()
+    qtbot.addWidget(widget)
+
+    state = ProcessingState(total=5, done=2)
+    widget.update_state(state)
+    widget.set_paused(True)
+
+    assert widget._is_paused is True
+    assert widget._pause_button.text() == "Resume"
+    assert widget._pause_pending is False
+
+
+def test_processing_widget_set_paused_shows_pause(qtbot: MagicMock) -> None:
+    widget = ProcessingWidget()
+    qtbot.addWidget(widget)
+
+    state = ProcessingState(total=5, done=2)
+    widget.update_state(state)
+    widget.set_paused(True)
+    widget.set_paused(False)
+
+    assert widget._is_paused is False
+    assert widget._pause_button.text() == "Pause"
+
+
+def test_processing_widget_set_pause_pending(qtbot: MagicMock) -> None:
+    widget = ProcessingWidget()
+    qtbot.addWidget(widget)
+
+    state = ProcessingState(total=5, done=2)
+    widget.update_state(state)
+
+    widget.set_pause_pending(True)
+    assert widget._pause_pending is True
+    assert widget._pause_button.isEnabled() is False
+
+    widget.set_pause_pending(False)
+    assert widget._pause_pending is False
+    assert widget._pause_button.isEnabled() is True
+
+
+def test_processing_widget_status_label_shows_paused(qtbot: MagicMock) -> None:
+    widget = ProcessingWidget()
+    qtbot.addWidget(widget)
+
+    state = ProcessingState(total=10, done=5)
+    widget.update_state(state)
+    widget.set_paused(True)
+    widget._update_display()
+
+    status = widget._status_label.text()
+    assert "[PAUSED]" in status
+
+
+def test_processing_widget_status_label_no_paused_when_not_paused(qtbot: MagicMock) -> None:
+    widget = ProcessingWidget()
+    qtbot.addWidget(widget)
+
+    state = ProcessingState(total=10, done=5)
+    widget.update_state(state)
+
+    status = widget._status_label.text()
+    assert "[PAUSED]" not in status
+
+
+def test_processing_widget_reset_clears_pause_state(qtbot: MagicMock) -> None:
+    widget = ProcessingWidget()
+    qtbot.addWidget(widget)
+
+    state = ProcessingState(total=5, done=2)
+    widget.update_state(state)
+    widget.set_paused(True)
+
+    widget.reset()
+
+    assert widget._is_paused is False
+    assert widget._pause_pending is False
+    assert widget._pause_button.text() == "Pause"
+    assert widget._pause_button.isEnabled() is False

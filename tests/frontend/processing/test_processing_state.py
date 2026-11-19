@@ -89,3 +89,59 @@ def test_processing_state_apply_done_removes_worker() -> None:
     assert len(state.workers) == 1
     assert 0 not in state.workers
     assert 1 in state.workers
+
+
+def test_processing_state_is_paused_default() -> None:
+    state = ProcessingState()
+    assert state.is_paused is False
+    assert state.paused_at is None
+
+
+def test_processing_state_pause() -> None:
+    state = ProcessingState()
+    assert state.is_paused is False
+    state.pause()
+    assert state.is_paused is True
+    assert state.paused_at is not None
+
+
+def test_processing_state_pause_twice() -> None:
+    state = ProcessingState()
+    state.pause()
+    paused_at = state.paused_at
+    time.sleep(0.01)
+    state.pause()
+    assert state.paused_at is not None
+    assert state.paused_at == paused_at
+
+
+def test_processing_state_resume() -> None:
+    state = ProcessingState()
+    state.pause()
+    initial_paused_at = state.paused_at
+    time.sleep(0.05)
+    state.resume()
+    assert state.is_paused is False
+    assert state.paused_at is None
+    assert state.paused_duration > 0
+
+
+def test_processing_state_resume_without_pause() -> None:
+    state = ProcessingState()
+    state.resume()
+    assert state.is_paused is False
+    assert state.paused_at is None
+
+
+def test_processing_state_elapsed_with_pause() -> None:
+    state = ProcessingState()
+    time.sleep(0.1)
+    elapsed_before_pause = state.elapsed
+    state.pause()
+    time.sleep(0.15)
+    elapsed_during_pause = state.elapsed
+    assert elapsed_during_pause - elapsed_before_pause < 0.05
+    state.resume()
+    time.sleep(0.05)
+    elapsed_after_resume = state.elapsed
+    assert elapsed_after_resume - elapsed_during_pause > 0.04
