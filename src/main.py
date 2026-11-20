@@ -448,51 +448,6 @@ class Dashboard:
             else:
                 self.failed += 1
 
-    def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
-        width = max(20, options.max_width)
-        height = max(3, console.size.height)
-
-        elapsed = time.monotonic() - self.started
-        fraction = self.done / self.total if self.total else 1.0
-        eta = (elapsed / self.done) * (self.total - self.done) if self.done else 0.0
-        bar_width = 20 if width >= 70 else 10 if width >= 40 else 0
-
-        header = Text(no_wrap=True, overflow="ellipsis")
-        header.append(f"{fraction * 100:3.0f}% ", style="bold")
-        if bar_width:
-            header.append(_bar(fraction, bar_width) + " ", style="cyan")
-        header.append(f"{self.done}/{self.total} ")
-        header.append(f"ok:{self.ok} ", style="green")
-        header.append(f"skip:{self.skipped} ", style="yellow")
-        header.append(f"fail:{self.failed} ", style="red")
-        header.append(f"{_format_duration(elapsed)}", style="dim")
-        if self.done and self.done < self.total:
-            header.append(f" ETA {_format_duration(eta)}", style="dim")
-        yield header
-
-        available = max(1, height - 3)
-        items = sorted(self.workers.items())
-        if len(items) > available:
-            shown = items[: max(1, available - 1)]
-            hidden = len(items) - len(shown)
-        else:
-            shown = items
-            hidden = 0
-
-        for worker_id, (file_name, step, description, details) in shown:
-            row = Text(no_wrap=True, overflow="ellipsis")
-            row.append(f"W{worker_id:02d} ", style="bold")
-            row.append(f"{step}/{NUMBER_OF_STEPS} ", style="cyan")
-            if width >= 50:
-                row.append(f"{description:<16} ")
-            row.append(file_name, style="white")
-            if details and width >= 110:
-                row.append(f"  {details}", style="dim")
-            yield row
-
-        if hidden:
-            yield Text(f"+{hidden} more workers", style="dim", no_wrap=True)
-
 
 def run_pool(tasks: list[tuple[str, str]]) -> Dashboard:
     workers = max(1, cpu_count() - 1)

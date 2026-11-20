@@ -746,18 +746,6 @@ def test_dashboard_render_narrow_limits_rows_and_width() -> None:
     assert "details" not in output
 
 
-def test_dashboard_rich_console_zero_total() -> None:
-    dashboard = Dashboard(0)
-    dashboard.apply(("step", 0, "file.wav", 1, "Loading", ""))
-
-    string_io = StringIO()
-    console = Console(file=string_io, force_terminal=True, width=80)
-    rendered = list(dashboard.__rich_console__(console, console.options))
-
-    assert len(rendered) > 0
-    assert "0/0" in str(rendered[0])
-
-
 def test_run_pool() -> None:
     tasks = [("in.wav", "out.mp3")]
     mock_queue = MagicMock()
