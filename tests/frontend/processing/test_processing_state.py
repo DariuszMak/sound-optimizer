@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import time
 
+import pytest
+
 from src.frontend.processing.processing_state import ProcessingState
 
 
@@ -27,8 +29,6 @@ def test_processing_state_fraction_zero_total() -> None:
 
 
 def test_processing_state_elapsed() -> None:
-    import time
-
     state = ProcessingState()
     time.sleep(0.05)
     assert state.elapsed >= 0.04
@@ -51,27 +51,14 @@ def test_processing_state_apply_step() -> None:
     assert state.workers[0] == ("file.wav", 1, "Loading", "")
 
 
-def test_processing_state_apply_done() -> None:
+@pytest.mark.parametrize("status", ["ok", "skipped", "failed"])
+def test_processing_state_apply_done_status(status: str) -> None:
     state = ProcessingState(total=5)
     state.apply(("step", 0, "file.wav", 1, "Loading", ""))
-    state.apply(("done", 0, "file.wav", "ok"))
+    state.apply(("done", 0, "file.wav", status))
     assert 0 not in state.workers
     assert state.done == 1
-    assert state.ok == 1
-
-
-def test_processing_state_apply_done_skipped() -> None:
-    state = ProcessingState(total=5)
-    state.apply(("done", 0, "file.wav", "skipped"))
-    assert state.done == 1
-    assert state.skipped == 1
-
-
-def test_processing_state_apply_done_failed() -> None:
-    state = ProcessingState(total=5)
-    state.apply(("done", 0, "file.wav", "failed"))
-    assert state.done == 1
-    assert state.failed == 1
+    assert getattr(state, status) == 1
 
 
 def test_processing_state_apply_multiple_workers() -> None:
@@ -144,20 +131,3 @@ def test_processing_state_elapsed_with_pause() -> None:
     time.sleep(0.05)
     elapsed_after_resume = state.elapsed
     assert elapsed_after_resume - elapsed_during_pause > 0.04
-
-
-def test_processing_state_apply_done_with_all_statuses() -> None:
-
-    state = ProcessingState(total=5)
-
-    state.apply(("done", 0, "file1.wav", "ok"))
-    assert state.done == 1
-    assert state.ok == 1
-
-    state.apply(("done", 1, "file2.wav", "skipped"))
-    assert state.done == 2
-    assert state.skipped == 1
-
-    state.apply(("done", 2, "file3.wav", "failed"))
-    assert state.done == 3
-    assert state.failed == 1
