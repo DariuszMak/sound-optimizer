@@ -5,7 +5,7 @@ import multiprocessing
 import os
 from io import StringIO
 from queue import Empty
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -51,7 +51,8 @@ if TYPE_CHECKING:
 
 
 def _wav_bytes(samples: np.ndarray, sample_rate: int, channels: int = 1) -> bytes:
-    return (
+    return cast(
+        "bytes",
         AudioSegment(
             (samples * 32767).astype(np.int16).tobytes(),
             frame_rate=sample_rate,
@@ -59,7 +60,7 @@ def _wav_bytes(samples: np.ndarray, sample_rate: int, channels: int = 1) -> byte
             channels=channels,
         )
         .export(format="wav")
-        .read()
+        .read(),
     )
 
 

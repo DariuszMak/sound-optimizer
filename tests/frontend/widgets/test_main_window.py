@@ -186,13 +186,13 @@ def test_set_tasks_valid(window: MainWindow) -> None:
 
 
 @patch("PySide6.QtWidgets.QFileDialog.getOpenFileNames", return_value=(["/path/to/file.mp3"], ""))
-def test_on_select_files(mock_file_dialog: MagicMock, window: MainWindow) -> None:
+def test_on_select_files(_mock: MagicMock, window: MainWindow) -> None:  # ruff: ignore[pytest-fixture-param-without-value]
     window._on_select_files()
     assert window._start_button.isEnabled() is True
 
 
 @patch("PySide6.QtWidgets.QFileDialog.getOpenFileNames", return_value=([], ""))
-def test_on_select_files_cancelled(mock_file_dialog: MagicMock, window: MainWindow) -> None:
+def test_on_select_files_cancelled(_mock: MagicMock, window: MainWindow) -> None:  # ruff: ignore[pytest-fixture-param-without-value]
     window._on_select_files()
     assert window._start_button.isEnabled() is False
 
@@ -214,7 +214,7 @@ def test_on_select_folder_cancelled(mock_dir_dialog: MagicMock, window: MainWind
 
 
 @patch("src.frontend.widgets.main_window.check_ffmpeg_installed", return_value=False)
-def test_on_start_processing_no_ffmpeg(mock_ffmpeg: MagicMock, window: MainWindow) -> None:
+def test_on_start_processing_no_ffmpeg(_mock: MagicMock, window: MainWindow) -> None:  # ruff: ignore[pytest-fixture-param-without-value]
     window._tasks = [("in.mp3", "out.mp3")]
     window._on_start_processing()
     assert window._is_processing is False
@@ -237,7 +237,7 @@ def test_on_start_processing_success(window: MainWindow) -> None:
 
 
 @patch("src.frontend.widgets.main_window.check_ffmpeg_installed", return_value=True)
-def test_on_start_processing_empty_tasks(mock_ffmpeg: MagicMock, window: MainWindow) -> None:
+def test_on_start_processing_empty_tasks(_mock: MagicMock, window: MainWindow) -> None:  # ruff: ignore[pytest-fixture-param-without-value]
     window._tasks = []
     window._set_busy(False)
     window._on_start_processing()
@@ -245,7 +245,7 @@ def test_on_start_processing_empty_tasks(mock_ffmpeg: MagicMock, window: MainWin
 
 
 @patch("src.frontend.widgets.main_window.check_ffmpeg_installed", return_value=True)
-def test_on_start_processing_already_processing(mock_ffmpeg: MagicMock, window: MainWindow) -> None:
+def test_on_start_processing_already_processing(_mock: MagicMock, window: MainWindow) -> None:  # ruff: ignore[pytest-fixture-param-without-value]
     window._tasks = [("in.mp3", "out.mp3")]
     window._is_processing = True
     window._on_start_processing()
