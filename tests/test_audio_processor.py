@@ -1,0 +1,528 @@
+from __future__ import annotations
+
+import multiprocessing
+import os
+from typing import TYPE_CHECKING, cast
+from unittest.mock import MagicMock, patch
+
+import numpy as np
+import pytest
+from pydub import AudioSegment
+
+from src import audio_processor as audio_processor_module
+from src.audio_processor import (
+    EQ_BANDS,
+    EQ_Q,
+    MAX_PRE_GAIN_DB,
+    TARGET_LUFS,
+    TRIM_THRESHOLD_DB,
+    TRUE_PEAK_CEILING_DB,
+    _init_worker,
+    _measure_lufs,
+    _peaking_biquad,
+    apply_eq_for_metering,
+    dynamic_loudness_control,
+    export_audio,
+    format_loudness_params,
+    limiter,
+    load_audio,
+    process_audio,
+    remove_long_silences_multi,
+    smooth_gain,
+    trim_silence_multi,
+)
+from src.main import (
+    NUMBER_OF_STEPS,
+    SUPPORTED,
+)
+from tests.conftest import generate_sine_wave
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+
+def _wav_bytes(samples: np.ndarray, sample_rate: int, channels: int = 1) -> bytes:
+    return cast(
+        "bytes",
+        AudioSegment(
+            (samples * 32767).astype(np.int16).tobytes(),
+            frame_rate=sample_rate,
+            sample_width=2,
+            channels=channels,
+        )
+        .export(format="wav")
+        .read(),
+    )
+
+
+def _write_wav(path: Path, samples: np.ndarray, sample_rate: int, channels: int = 1) -> str:
+    path.write_bytes(_wav_bytes(samples, sample_rate, channels=channels))
+    return str(path)
+
+
+def test_constants() -> None:
+    assert [
+        (60.0, 20 * np.log10(1.40)),
+        (230.0, 20 * np.log10(1.20)),
+        (910.0, 20 * np.log10(0.60)),
+        (3600.0, 20 * np.log10(0.90)),
+        (14000.0, 20 * np.log10(1.10)),
+    ] == EQ_BANDS
+    assert pytest.approx(1.0) == EQ_Q
+    assert pytest.approx(-16.0) == TARGET_LUFS
+    assert pytest.approx(45.0) == TRIM_THRESHOLD_DB
+    assert pytest.approx(30.0) == MAX_PRE_GAIN_DB
+    assert pytest.approx(-1.0) == TRUE_PEAK_CEILING_DB
+    assert SUPPORTED == (".wav", ".mp3", ".flac", ".ogg", ".m4a", ".wma", ".mpc")
+
+
+def test_peaking_biquad() -> None:
+    b, a = _peaking_biquad(1000.0, 3.0, 1.0, 44100)
+    assert len(b) == 3
+    assert len(a) == 3
+    assert b.dtype == np.float64
+    assert a.dtype == np.float64
+
+
+def test_peaking_biquad_edge_cases() -> None:
+    b_zero, a_zero = _peaking_biquad(1000.0, 0.0, 1.0, 44100)
+    np.testing.assert_almost_equal(b_zero, a_zero)
+
+    b_neg, a_neg = _peaking_biquad(1000.0, -5.0, 1.0, 44100)
+    assert len(b_neg) == 3
+    assert len(a_neg) == 3
+
+    b_nyq, a_nyq = _peaking_biquad(22050.0, 3.0, 1.0, 44100)
+    assert len(b_nyq) == 3
+    assert len(a_nyq) == 3
+
+
+def test_apply_eq_for_metering(sample_rate: int) -> None:
+    sine = generate_sine_wave(duration_sec=0.1, sr=sample_rate)
+    out = apply_eq_for_metering(sine, sample_rate)
+
+    assert out.shape == sine.shape
+    assert out.dtype == np.float32
+
+    bands = [
+        (1000.0, 0.0),
+        (24000.0, 5.0),
+        (1000.0, 5.0),
+    ]
+    out2 = apply_eq_for_metering(sine, sample_rate, bands=bands)
+    assert out2.shape == sine.shape
+
+
+def test_apply_eq_for_metering_edge_cases(sample_rate: int) -> None:
+    sine = generate_sine_wave(duration_sec=0.1, sr=sample_rate)
+
+    out_nyq = apply_eq_for_metering(sine, sample_rate, bands=[(sample_rate / 2.0, 5.0)])
+    np.testing.assert_array_equal(out_nyq, sine)
+
+    out_zero = apply_eq_for_metering(sine, sample_rate, bands=[(1000.0, 0.0)])
+    np.testing.assert_array_almost_equal(out_zero, sine, decimal=5)
+
+    out_all = apply_eq_for_metering(sine, sample_rate, bands=[(100.0, 0.0), (1000.0, 0.0)])
+    np.testing.assert_array_almost_equal(out_all, sine, decimal=5)
+
+
+def test_trim_silence_multi(sample_rate: int) -> None:
+    silence = np.zeros(sample_rate * 1, dtype=np.float32)
+    sine = generate_sine_wave(duration_sec=1.0, sr=sample_rate)
+    signal = np.concatenate([silence, sine, silence])
+
+    trimmed = trim_silence_multi(signal, top_db=45.0)
+    assert len(trimmed) > 0
+    assert len(trimmed) <= sample_rate * 1.01
+    assert len(trimmed) >= sample_rate * 0.99
+
+    empty_1d = trim_silence_multi(np.zeros(100, dtype=np.float32), top_db=45.0)
+    assert len(empty_1d) == 0
+
+    empty_2d = trim_silence_multi(np.zeros((100, 2), dtype=np.float32), top_db=45.0)
+    assert len(empty_2d) == 0
+    assert empty_2d.shape[1] == 2
+
+
+def test_trim_silence_multi_edge_cases() -> None:
+    threshold = 10 ** (45.0 / -20)
+    y_exact = np.array([threshold, threshold], dtype=np.float32)
+    out_exact = trim_silence_multi(y_exact, 45.0)
+    assert len(out_exact) == 0
+
+    y_partial = np.array([threshold * 0.5, threshold * 1.1, threshold * 0.5], dtype=np.float32)
+    out_partial = trim_silence_multi(y_partial, 45.0)
+    assert len(out_partial) == 1
+    assert out_partial[0] == np.float32(threshold * 1.1)
+
+
+def test_remove_long_silences_multi(sample_rate: int) -> None:
+    sine1 = generate_sine_wave(duration_sec=1.0, sr=sample_rate)
+    silence = np.zeros(int(sample_rate * 2.5), dtype=np.float32)
+    sine2 = generate_sine_wave(duration_sec=1.0, sr=sample_rate)
+    signal = np.concatenate([sine1, silence, sine2]).reshape(-1, 1)
+
+    processed = remove_long_silences_multi(signal, sr=sample_rate, silence_db=45.0, min_silence_sec=2.0)
+    assert len(processed) < sample_rate * 2.5
+    assert len(processed) >= int(sample_rate * 1.99)
+
+    empty_2d = remove_long_silences_multi(np.zeros((sample_rate * 3, 2), dtype=np.float32), sample_rate)
+    assert len(empty_2d) == 0
+    assert empty_2d.shape[1] == 2
+
+
+def test_remove_long_silences_multi_edge_cases(sample_rate: int) -> None:
+    threshold = 10 ** (45.0 / -20)
+    min_silence_len = int(sample_rate * 2.0)
+    fade_len = int(sample_rate * 0.05)
+
+    y_exact = np.full((min_silence_len, 1), threshold * 0.9, dtype=np.float32)
+    out_exact = remove_long_silences_multi(y_exact, sample_rate, silence_db=45.0, min_silence_sec=2.0)
+    assert len(out_exact) == 0
+
+    y_adj = np.concatenate([y_exact, y_exact], axis=0)
+    out_adj = remove_long_silences_multi(y_adj, sample_rate, silence_db=45.0, min_silence_sec=2.0)
+    assert len(out_adj) == 0
+
+    y_fade = np.concatenate([np.full((fade_len * 3, 1), threshold * 2.0, dtype=np.float32), y_exact], axis=0)
+    out_fade = remove_long_silences_multi(y_fade, sample_rate, silence_db=45.0, min_silence_sec=2.0, fade_sec=0.05)
+    assert len(out_fade) == fade_len * 3
+    assert out_fade[0, 0] == pytest.approx(0.0)
+
+
+def test_measure_lufs(sample_rate: int) -> None:
+    valid_audio = generate_sine_wave(duration_sec=1.0, sr=sample_rate)
+    short_audio = generate_sine_wave(duration_sec=0.1, sr=sample_rate)
+
+    lufs_valid = _measure_lufs(valid_audio, sample_rate)
+    lufs_invalid = _measure_lufs(short_audio, sample_rate)
+
+    assert isinstance(lufs_valid, float)
+    assert lufs_invalid is None
+
+
+def test_measure_lufs_edge_cases(sample_rate: int) -> None:
+    short_audio = np.zeros(int(sample_rate * 0.4), dtype=np.float32)
+    assert _measure_lufs(short_audio, sample_rate) is None
+
+    valid_audio = np.zeros(sample_rate, dtype=np.float32)
+    with patch("pyloudnorm.Meter.integrated_loudness", return_value=np.nan):
+        assert _measure_lufs(valid_audio, sample_rate) is None
+
+    with patch("pyloudnorm.Meter.integrated_loudness", side_effect=ValueError):
+        assert _measure_lufs(valid_audio, sample_rate) is None
+
+
+def test_measure_lufs_zero_and_sine_wave() -> None:
+    zero_signal = np.zeros(44100, dtype=np.float32)
+    assert _measure_lufs(zero_signal, 44100) is None
+
+    sine = generate_sine_wave(duration_sec=1.0, sr=44100, amp=0.5)
+    lufs = _measure_lufs(sine, 44100)
+    assert lufs is not None
+    assert lufs > -30
+
+
+def test_smooth_gain(sample_rate: int) -> None:
+    gains = np.array([0.0, 5.0, -5.0, 2.0], dtype=np.float32)
+    smoothed = smooth_gain(gains, sample_rate, attack_sec=0.1, release_sec=0.2)
+
+    assert smoothed.shape == gains.shape
+    assert smoothed.dtype == np.float32
+
+
+def test_smooth_gain_edge_cases(sample_rate: int) -> None:
+    gain_const = np.array([5.0, 5.0, 5.0], dtype=np.float32)
+    out_const = smooth_gain(gain_const, sample_rate)
+    np.testing.assert_array_equal(out_const, gain_const)
+
+    gain_mono = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+    out_mono = smooth_gain(gain_mono, sample_rate)
+    assert out_mono[2] > out_mono[1] > out_mono[0]
+
+    gain_single = np.array([5.0], dtype=np.float32)
+    out_single = smooth_gain(gain_single, sample_rate)
+    assert out_single[0] == pytest.approx(5.0)
+
+    zero_signal = np.zeros(44100, dtype=np.float32)
+    result = smooth_gain(zero_signal, 44100)
+    assert result is not None
+    assert len(result) == len(zero_signal)
+
+
+def test_dynamic_loudness_control(sample_rate: int) -> None:
+    sine = generate_sine_wave(duration_sec=9.0, sr=sample_rate).reshape(-1, 1)
+    out = dynamic_loudness_control(sine, sample_rate, target_lufs=-16.0, window_sec=8.0)
+
+    assert out.shape == sine.shape
+    assert out.dtype == np.float32
+
+    short_sine = generate_sine_wave(duration_sec=1.0, sr=sample_rate).reshape(-1, 1)
+    out_short = dynamic_loudness_control(short_sine, sample_rate, target_lufs=-16.0, window_sec=8.0)
+    np.testing.assert_array_equal(out_short, short_sine)
+
+    silence = np.zeros((sample_rate * 9, 1), dtype=np.float32)
+    out_silence = dynamic_loudness_control(silence, sample_rate, target_lufs=-16.0, window_sec=8.0)
+    np.testing.assert_array_equal(out_silence, silence)
+
+
+def test_dynamic_loudness_control_edge_cases() -> None:
+    mono = generate_sine_wave(duration_sec=0.1, sr=44100)
+    result = dynamic_loudness_control(mono, 44100, -16.0)
+    assert result is not None
+    assert len(result) == len(mono)
+
+    quiet = (mono * 0.001).astype(np.float32)
+    result_quiet = dynamic_loudness_control(quiet, 44100, -16.0)
+    assert result_quiet is not None
+
+
+def test_limiter(sample_rate: int) -> None:
+    loud_signal = generate_sine_wave(duration_sec=0.5, sr=sample_rate, amp=2.0)
+    ceiling_db = -1.0
+    ceiling_lin = 10 ** (ceiling_db / 20)
+
+    limited_signal = limiter(loud_signal, sr=sample_rate, ceiling_db=ceiling_db)
+    max_peak = float(np.max(np.abs(limited_signal)))
+    assert max_peak <= ceiling_lin + 0.05
+    assert max_peak > 0.0
+
+    loud_2d = np.column_stack((loud_signal, loud_signal))
+    limited_2d = limiter(loud_2d, sr=sample_rate, ceiling_db=ceiling_db)
+    assert limited_2d.shape == loud_2d.shape
+    max_peak_2d = float(np.max(np.abs(limited_2d)))
+    assert max_peak_2d <= ceiling_lin + 0.05
+
+
+def test_limiter_edge_cases() -> None:
+    mono = generate_sine_wave(duration_sec=0.1, sr=44100)
+
+    result = limiter(mono, 44100)
+    assert result is not None
+    assert len(result) == len(mono)
+
+    loud = (mono * 10.0).astype(np.float32)
+    result_loud = limiter(loud, 44100)
+    assert result_loud is not None
+
+    silent = np.zeros_like(mono)
+    result_silent = limiter(silent, 44100)
+    assert result_silent is not None
+
+
+def test_load_and_export_audio(tmp_path: Path, sample_rate: int) -> None:
+    sine = generate_sine_wave(duration_sec=0.5, sr=sample_rate)
+    sine_2d = np.column_stack((sine, sine))
+    out_path = str(tmp_path / "test_out.mp3")
+
+    export_audio(sine_2d, sample_rate, out_path, audio_format="mp3")
+    assert os.path.exists(out_path)
+
+    loaded, sr = load_audio(out_path)
+    assert loaded is not None
+    assert sr is not None
+    assert loaded.ndim == 2
+
+    invalid_path = str(tmp_path / "does_not_exist.mp3")
+    loaded_inv, sr_inv = load_audio(invalid_path)
+    assert loaded_inv is None
+    assert sr_inv is None
+
+
+def test_export_audio_edge_cases(tmp_path: Path, sample_rate: int) -> None:
+    y_mono = generate_sine_wave(duration_sec=0.1, sr=sample_rate)
+    y_stereo = np.column_stack((y_mono, y_mono))
+    y_clip = (y_mono * 5.0).astype(np.float32)
+
+    wav_path = str(tmp_path / "out.wav")
+    flac_path = str(tmp_path / "out.flac")
+    clip_path = str(tmp_path / "clip.mp3")
+
+    export_audio(y_mono, sample_rate, wav_path, audio_format="wav")
+    assert os.path.exists(wav_path)
+
+    export_audio(y_stereo, sample_rate, flac_path, audio_format="flac")
+    assert os.path.exists(flac_path)
+
+    export_audio(y_clip, sample_rate, clip_path, audio_format="mp3")
+    assert os.path.exists(clip_path)
+
+
+def test_load_audio_edge_cases(tmp_path: Path, sample_rate: int) -> None:
+    y_mono = generate_sine_wave(duration_sec=0.1, sr=sample_rate)
+    wav_path = str(tmp_path / "test_edge.wav")
+    export_audio(y_mono, sample_rate, wav_path, audio_format="wav")
+
+    arr, sr = load_audio(wav_path)
+    assert arr is not None
+    assert sr == sample_rate
+
+    bad_path = str(tmp_path / "bad.wav")
+    with open(bad_path, "wb") as f:
+        f.write(b"not an audio file")
+    arr_bad, sr_bad = load_audio(bad_path)
+    assert arr_bad is None
+    assert sr_bad is None
+
+
+def test_load_audio_exception_handling() -> None:
+    with patch("src.audio_processor.AudioSegment.from_file", side_effect=Exception("Invalid file")):
+        result = load_audio("nonexistent.wav")
+    assert result == (None, None)
+
+
+def test_process_audio_end_to_end(tmp_path: Path, sample_rate: int) -> None:
+    sine = generate_sine_wave(duration_sec=2.0, sr=sample_rate, amp=0.5)
+    input_wav = _write_wav(tmp_path / "test_input.wav", sine, sample_rate)
+    output_mp3 = str(tmp_path / "test_processed.mp3")
+
+    process_audio((input_wav, output_mp3))
+
+    assert os.path.exists(output_mp3)
+    assert os.path.getsize(output_mp3) > 0
+
+
+def test_process_audio_edge_cases(tmp_path: Path, sample_rate: int) -> None:
+    out_existing = tmp_path / "exists.mp3"
+    out_existing.write_text("dummy")
+    process_audio(("nonexistent.wav", str(out_existing)))
+
+    process_audio(("invalid.wav", str(tmp_path / "out_invalid.mp3")))
+
+    silence = np.zeros(sample_rate * 2, dtype=np.float32)
+    silence_in = _write_wav(tmp_path / "silence.wav", silence, sample_rate)
+    silence_out = str(tmp_path / "silence_out.mp3")
+    process_audio((silence_in, silence_out))
+    assert not os.path.exists(silence_out)
+
+    sine = generate_sine_wave(duration_sec=3.0, sr=sample_rate)
+    sine_2d = np.column_stack((sine, sine))
+    multi_in = _write_wav(tmp_path / "multi.wav", sine_2d, sample_rate, channels=2)
+    multi_out = str(tmp_path / "multi_out.mp3")
+    process_audio((multi_in, multi_out))
+    assert os.path.exists(multi_out)
+
+
+def test_process_audio_lufs_flows(tmp_path: Path, sample_rate: int) -> None:
+    sine = generate_sine_wave(duration_sec=1.0, sr=sample_rate)
+    in_wav = _write_wav(tmp_path / "flow.wav", sine, sample_rate)
+
+    out_mp3 = str(tmp_path / "flow_out.mp3")
+    with patch("src.audio_processor._measure_lufs", side_effect=[-14.0, -10.0]) as mock_measure:
+        process_audio((in_wav, out_mp3))
+        assert mock_measure.call_count == 2
+        assert os.path.exists(out_mp3)
+
+    out_mp3_2 = str(tmp_path / "flow_out2.mp3")
+    with patch("src.audio_processor._measure_lufs", return_value=None):
+        process_audio((in_wav, out_mp3_2))
+        assert os.path.exists(out_mp3_2)
+
+
+def test_process_audio_visualization(tmp_path: Path, sample_rate: int, monkeypatch: pytest.MonkeyPatch) -> None:
+    sine = generate_sine_wave(duration_sec=2.0, sr=sample_rate, amp=0.5)
+    input_wav = _write_wav(tmp_path / "test_vis_input.wav", sine, sample_rate)
+    output_mp3 = str(tmp_path / "test_vis_output.mp3")
+
+    mock_queue = MagicMock()
+    monkeypatch.setattr(audio_processor_module, "_progress_queue", mock_queue)
+    monkeypatch.setattr(audio_processor_module, "_worker_slot", 3)
+
+    process_audio((input_wav, output_mp3))
+
+    messages = [call.args[0] for call in mock_queue.put.call_args_list]
+    step_messages = [m for m in messages if m[0] == "step"]
+    done_messages = [m for m in messages if m[0] == "done"]
+
+    assert len(step_messages) == NUMBER_OF_STEPS
+    assert [m[3] for m in step_messages] == list(range(1, NUMBER_OF_STEPS + 1))
+    assert all(m[1] == 3 for m in step_messages)
+    assert all(m[2] == "test_vis_input.wav" for m in step_messages)
+    assert step_messages[0][4] == "Loading"
+    assert step_messages[-1][4] == "Exporting Audio"
+
+    detail_messages = [m for m in step_messages if m[5]]
+    assert len(detail_messages) == 3
+    assert "Dry:" in detail_messages[0][5]
+    assert "Pre-Gain:" in detail_messages[0][5]
+
+    assert done_messages == [("done", 3, "test_vis_input.wav", "ok")]
+    assert os.path.exists(output_mp3)
+
+
+def test_process_audio_reports_status(tmp_path: Path, sample_rate: int, monkeypatch: pytest.MonkeyPatch) -> None:
+    mock_queue = MagicMock()
+    monkeypatch.setattr(audio_processor_module, "_progress_queue", mock_queue)
+    monkeypatch.setattr(audio_processor_module, "_worker_slot", 0)
+
+    existing = tmp_path / "exists.mp3"
+    existing.write_text("dummy")
+    process_audio(("nonexistent.wav", str(existing)))
+    assert mock_queue.put.call_args_list[-1].args[0] == ("done", 0, "nonexistent.wav", "skipped")
+
+    mock_queue.reset_mock()
+    process_audio(("invalid.wav", str(tmp_path / "out_invalid.mp3")))
+    assert mock_queue.put.call_args_list[-1].args[0] == ("done", 0, "invalid.wav", "failed")
+
+    mock_queue.reset_mock()
+    silence = np.zeros(sample_rate * 2, dtype=np.float32)
+    silence_in = _write_wav(tmp_path / "silence.wav", silence, sample_rate)
+    process_audio((silence_in, str(tmp_path / "silence_out.mp3")))
+    assert mock_queue.put.call_args_list[-1].args[0] == ("done", 0, "silence.wav", "skipped")
+
+
+def test_process_audio_skipped_when_no_audio() -> None:
+    with patch("src.audio_processor.load_audio", return_value=(None, None)):
+        assert process_audio(("input.wav", "output.mp3")) is None  # type: ignore[func-returns-value]
+
+
+def test_process_audio_visualization_data() -> None:
+    sine = generate_sine_wave(duration_sec=0.1, sr=44100)
+    with patch("src.audio_processor.load_audio", return_value=(sine.astype(np.float32), 44100)):
+        assert process_audio(("input.wav", "output.mp3")) is None  # type: ignore[func-returns-value]
+
+
+def test_format_loudness_params() -> None:
+    formatted = format_loudness_params(lufs_dry=-20.5, lufs_eq=-18.2, gain_db=4.5)
+    assert "Dry: -20.5 LUFS" in formatted
+    assert "EQ: -18.2 LUFS" in formatted
+    assert "Pre-Gain: +4.5 dB" in formatted
+
+    formatted_none = format_loudness_params(lufs_dry=None, lufs_eq=None, gain_db=None)
+    assert "Dry: N/A" in formatted_none
+    assert "EQ: N/A" in formatted_none
+    assert "Pre-Gain: 0.0 dB" in formatted_none
+
+
+@pytest.mark.parametrize(
+    ("lufs_dry", "lufs_eq", "gain_db", "expected"),
+    [
+        (None, -10.0, None, "Dry: N/A | EQ: -10.0 LUFS | Pre-Gain: 0.0 dB"),
+        (-15.0, None, 5.0, "Dry: -15.0 LUFS | EQ: N/A | Pre-Gain: +5.0 dB"),
+        (None, None, None, "Dry: N/A | EQ: N/A | Pre-Gain: 0.0 dB"),
+        (-20.0, None, 5.0, "Dry: -20.0 LUFS | EQ: N/A | Pre-Gain: +5.0 dB"),
+        (-20.0, -18.0, 0.0, "Dry: -20.0 LUFS | EQ: -18.0 LUFS | Pre-Gain: +0.0 dB"),
+    ],
+)
+def test_format_loudness_params_edge_cases(
+    lufs_dry: float | None,
+    lufs_eq: float | None,
+    gain_db: float | None,
+    expected: str,
+) -> None:
+    assert format_loudness_params(lufs_dry, lufs_eq, gain_db) == expected
+
+
+def test_init_worker() -> None:
+    counter = multiprocessing.Value("i", 0)
+
+    _init_worker(counter)
+    assert audio_processor_module._worker_slot == 0
+    assert audio_processor_module._progress_queue is None
+    assert counter.value == 1
+
+    queue = MagicMock()
+    _init_worker(counter, queue)
+    assert audio_processor_module._worker_slot == 1
+    assert audio_processor_module._progress_queue is queue
+    assert counter.value == 2
