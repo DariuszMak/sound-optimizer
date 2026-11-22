@@ -4,7 +4,6 @@ import logging
 import multiprocessing
 import os
 from io import StringIO
-from queue import Empty
 from typing import TYPE_CHECKING, cast
 from unittest.mock import MagicMock, patch
 
@@ -44,7 +43,6 @@ from src.main import (
     check_ffmpeg_installed,
     collect_audio_files,
     main,
-    run_pool,
 )
 from tests.conftest import generate_sine_wave
 
@@ -621,13 +619,11 @@ def test_main_missing_ffmpeg() -> None:
     with (
         patch("src.main.check_ffmpeg_installed", return_value=False) as mock_check,
         patch("src.main.collect_audio_files") as mock_collect,
-        patch("src.main.Pool") as mock_pool,
     ):
         main()
 
     mock_check.assert_called_once()
     mock_collect.assert_not_called()
-    mock_pool.assert_not_called()
 
 
 def test_format_loudness_params() -> None:
@@ -758,46 +754,3 @@ def test_dashboard_rich_console_zero_total() -> None:
 
     assert len(rendered) > 0
     assert "0/0" in str(rendered[0])
-
-
-def test_run_pool() -> None:
-    tasks = [("in.wav", "out.mp3")]
-    mock_queue = MagicMock()
-    mock_queue.get.side_effect = [("done", 0, "in.wav", "ok"), Empty]
-    mock_queue.get_nowait.side_effect = Empty
-
-    with (
-        patch("src.main.Pool") as mock_pool,
-        patch("src.main.Queue", return_value=mock_queue),
-        patch("src.main.Live") as mock_live,
-    ):
-        mock_pool_instance = MagicMock()
-        mock_pool.return_value.__enter__.return_value = mock_pool_instance
-        dashboard = run_pool(tasks)
-
-    mock_pool_instance.apply_async.assert_called_once_with(process_audio, (tasks[0],))
-    mock_live.assert_called_once()
-    assert dashboard.total == 1
-    assert dashboard.done == 1
-    assert dashboard.ok == 1
-
-
-@pytest.mark.parametrize("tasks", [[("in.wav", "out.mp3"), ("in2.wav", "out2.mp3")], [("in.wav", "out.mp3")]])
-def test_run_pool_stops_when_all_results_ready(tasks: list[tuple[str, str]]) -> None:
-    mock_queue = MagicMock()
-    mock_queue.get.side_effect = Empty
-    mock_queue.get_nowait.side_effect = Empty
-
-    with (
-        patch("src.main.Pool") as mock_pool,
-        patch("src.main.Queue", return_value=mock_queue),
-        patch("src.main.Live"),
-    ):
-        mock_pool_instance = MagicMock()
-        mock_pool.return_value.__enter__.return_value = mock_pool_instance
-        mock_pool_instance.apply_async.return_value.ready.return_value = True
-        dashboard = run_pool(tasks)
-
-    assert mock_pool_instance.apply_async.call_count == len(tasks)
-    assert dashboard.total == len(tasks)
-    assert dashboard.done == 0

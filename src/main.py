@@ -4,18 +4,16 @@ import shutil
 import sys
 import time
 import warnings
-from multiprocessing import Pool, Queue, Value, cpu_count, freeze_support
-from queue import Empty
-from typing import Any, TypeAlias
+from multiprocessing import freeze_support
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 import numpy as np
 from numpy.typing import NDArray
 from PySide6.QtWidgets import QApplication
-from rich.console import Console, ConsoleOptions, RenderResult
-from rich.live import Live
 from rich.text import Text
 
-from src.audio_processor import _init_worker, process_audio
+if TYPE_CHECKING:
+    from rich.console import Console, ConsoleOptions, RenderResult
 
 Float32Array: TypeAlias = NDArray[np.float32]
 Float64Array: TypeAlias = NDArray[np.float64]
@@ -150,34 +148,6 @@ class Dashboard:
 
         if hidden:
             yield Text(f"+{hidden} more workers", style="dim", no_wrap=True)
-
-
-def run_pool(tasks: list[tuple[str, str]]) -> Dashboard:
-    workers = max(1, cpu_count() - 1)
-    slot_counter = Value("i", 0)
-    progress_queue: Any = Queue()
-    dashboard = Dashboard(len(tasks))
-    console = Console()
-
-    with Pool(workers, initializer=_init_worker, initargs=(slot_counter, progress_queue)) as pool:
-        results = [pool.apply_async(process_audio, (task,)) for task in tasks]
-        with Live(
-            dashboard,
-            console=console,
-            refresh_per_second=10,
-            vertical_overflow="crop",
-            transient=False,
-        ):
-            while dashboard.done < dashboard.total:
-                try:
-                    dashboard.apply(progress_queue.get(timeout=0.1))
-                    while True:
-                        dashboard.apply(progress_queue.get_nowait())
-                except Empty:
-                    if all(r.ready() for r in results):
-                        break
-
-    return dashboard
 
 
 def main() -> None:
