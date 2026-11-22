@@ -37,6 +37,14 @@ logger = logging.getLogger(__name__)
 warnings.filterwarnings("ignore")
 
 
+def _init_worker(counter: Any, progress_queue: Any = None) -> None:
+    global _progress_queue, _worker_slot
+    _progress_queue = progress_queue
+    with counter.get_lock():
+        _worker_slot = counter.value
+        counter.value += 1
+
+
 def _emit(message: tuple[Any, ...]) -> None:
     if _progress_queue is not None:
         with contextlib.suppress(Exception):

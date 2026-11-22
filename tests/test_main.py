@@ -13,7 +13,7 @@ import pytest
 from pydub import AudioSegment
 from rich.console import Console
 
-from src import main as main_module
+from src import audio_processor as audio_processor_module
 from src.audio_processor import (
     EQ_BANDS,
     EQ_Q,
@@ -21,6 +21,7 @@ from src.audio_processor import (
     TARGET_LUFS,
     TRIM_THRESHOLD_DB,
     TRUE_PEAK_CEILING_DB,
+    _init_worker,
     _measure_lufs,
     _peaking_biquad,
     apply_eq_for_metering,
@@ -40,7 +41,6 @@ from src.main import (
     Dashboard,
     _bar,
     _format_duration,
-    _init_worker,
     check_ffmpeg_installed,
     collect_audio_files,
     main,
@@ -472,8 +472,8 @@ def test_process_audio_visualization(tmp_path: Path, sample_rate: int, monkeypat
     output_mp3 = str(tmp_path / "test_vis_output.mp3")
 
     mock_queue = MagicMock()
-    monkeypatch.setattr(main_module, "_progress_queue", mock_queue)
-    monkeypatch.setattr(main_module, "_worker_slot", 3)
+    monkeypatch.setattr(audio_processor_module, "_progress_queue", mock_queue)
+    monkeypatch.setattr(audio_processor_module, "_worker_slot", 3)
 
     process_audio((input_wav, output_mp3))
 
@@ -499,8 +499,8 @@ def test_process_audio_visualization(tmp_path: Path, sample_rate: int, monkeypat
 
 def test_process_audio_reports_status(tmp_path: Path, sample_rate: int, monkeypatch: pytest.MonkeyPatch) -> None:
     mock_queue = MagicMock()
-    monkeypatch.setattr(main_module, "_progress_queue", mock_queue)
-    monkeypatch.setattr(main_module, "_worker_slot", 0)
+    monkeypatch.setattr(audio_processor_module, "_progress_queue", mock_queue)
+    monkeypatch.setattr(audio_processor_module, "_worker_slot", 0)
 
     existing = tmp_path / "exists.mp3"
     existing.write_text("dummy")
@@ -665,14 +665,14 @@ def test_init_worker() -> None:
     counter = multiprocessing.Value("i", 0)
 
     _init_worker(counter)
-    assert main_module._worker_slot == 0
-    assert main_module._progress_queue is None
+    assert audio_processor_module._worker_slot == 0
+    assert audio_processor_module._progress_queue is None
     assert counter.value == 1
 
     queue = MagicMock()
     _init_worker(counter, queue)
-    assert main_module._worker_slot == 1
-    assert main_module._progress_queue is queue
+    assert audio_processor_module._worker_slot == 1
+    assert audio_processor_module._progress_queue is queue
     assert counter.value == 2
 
 

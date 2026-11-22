@@ -15,7 +15,7 @@ from rich.console import Console, ConsoleOptions, RenderResult
 from rich.live import Live
 from rich.text import Text
 
-from src.audio_processor import process_audio
+from src.audio_processor import _init_worker, process_audio
 
 Float32Array: TypeAlias = NDArray[np.float32]
 Float64Array: TypeAlias = NDArray[np.float64]
@@ -35,9 +35,6 @@ ANSI_RESET = "\033[0m"
 logger = logging.getLogger(__name__)
 
 
-_worker_slot: int | None = None
-_progress_queue: Any = None
-
 warnings.filterwarnings("ignore")
 
 
@@ -52,14 +49,6 @@ def check_ffmpeg_installed() -> bool:
         )
         return False
     return True
-
-
-def _init_worker(counter: Any, progress_queue: Any = None) -> None:
-    global _worker_slot, _progress_queue
-    _progress_queue = progress_queue
-    with counter.get_lock():
-        _worker_slot = counter.value
-        counter.value += 1
 
 
 def collect_audio_files() -> list[tuple[str, str]]:

@@ -12,10 +12,10 @@ from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QCloseEvent, QFont
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget
 
-from src.audio_processor import process_audio
+from src.audio_processor import _init_worker, process_audio
 from src.frontend.processing.processing_state import ProcessingState
 from src.frontend.widgets.processing_widget import ProcessingWidget
-from src.main import EXCLUDED_DIRS, INPUT_ROOT, OUTPUT_ROOT, SUPPORTED, _init_worker, check_ffmpeg_installed
+from src.main import EXCLUDED_DIRS, INPUT_ROOT, OUTPUT_ROOT, SUPPORTED, check_ffmpeg_installed
 
 logger = logging.getLogger(__name__)
 _POLL_INTERVAL_MS = 100
