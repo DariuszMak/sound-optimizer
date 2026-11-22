@@ -413,7 +413,7 @@ def test_load_audio_edge_cases(tmp_path: Path, sample_rate: int) -> None:
 
 
 def test_load_audio_exception_handling() -> None:
-    with patch("src.main.AudioSegment.from_file", side_effect=Exception("Invalid file")):
+    with patch("src.audio_processor.AudioSegment.from_file", side_effect=Exception("Invalid file")):
         result = load_audio("nonexistent.wav")
     assert result == (None, None)
 
@@ -455,13 +455,13 @@ def test_process_audio_lufs_flows(tmp_path: Path, sample_rate: int) -> None:
     in_wav = _write_wav(tmp_path / "flow.wav", sine, sample_rate)
 
     out_mp3 = str(tmp_path / "flow_out.mp3")
-    with patch("src.main._measure_lufs", side_effect=[-14.0, -10.0]) as mock_measure:
+    with patch("src.audio_processor._measure_lufs", side_effect=[-14.0, -10.0]) as mock_measure:
         process_audio((in_wav, out_mp3))
         assert mock_measure.call_count == 2
         assert os.path.exists(out_mp3)
 
     out_mp3_2 = str(tmp_path / "flow_out2.mp3")
-    with patch("src.main._measure_lufs", return_value=None):
+    with patch("src.audio_processor._measure_lufs", return_value=None):
         process_audio((in_wav, out_mp3_2))
         assert os.path.exists(out_mp3_2)
 
@@ -519,13 +519,13 @@ def test_process_audio_reports_status(tmp_path: Path, sample_rate: int, monkeypa
 
 
 def test_process_audio_skipped_when_no_audio() -> None:
-    with patch("src.main.load_audio", return_value=(None, None)):
+    with patch("src.audio_processor.load_audio", return_value=(None, None)):
         assert process_audio(("input.wav", "output.mp3")) is None  # type: ignore[func-returns-value]
 
 
 def test_process_audio_visualization_data() -> None:
     sine = generate_sine_wave(duration_sec=0.1, sr=44100)
-    with patch("src.main.load_audio", return_value=(sine.astype(np.float32), 44100)):
+    with patch("src.audio_processor.load_audio", return_value=(sine.astype(np.float32), 44100)):
         assert process_audio(("input.wav", "output.mp3")) is None  # type: ignore[func-returns-value]
 
 
