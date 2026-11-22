@@ -47,10 +47,11 @@ EQ_BANDS: list[tuple[float, float]] = [
 ]
 EQ_Q = 1.0
 
-warnings.filterwarnings("ignore")
 
 _worker_slot: int | None = None
 _progress_queue: Any = None
+
+warnings.filterwarnings("ignore")
 
 
 def check_ffmpeg_installed() -> bool:

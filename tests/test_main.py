@@ -14,6 +14,20 @@ from pydub import AudioSegment
 from rich.console import Console
 
 from src import main as main_module
+from src.audio_processor import (
+    _measure_lufs,
+    _peaking_biquad,
+    apply_eq_for_metering,
+    dynamic_loudness_control,
+    export_audio,
+    format_loudness_params,
+    limiter,
+    load_audio,
+    process_audio,
+    remove_long_silences_multi,
+    smooth_gain,
+    trim_silence_multi,
+)
 from src.main import (
     EQ_BANDS,
     EQ_Q,
@@ -27,22 +41,10 @@ from src.main import (
     _bar,
     _format_duration,
     _init_worker,
-    _measure_lufs,
-    _peaking_biquad,
-    apply_eq_for_metering,
     check_ffmpeg_installed,
     collect_audio_files,
-    dynamic_loudness_control,
-    export_audio,
-    format_loudness_params,
-    limiter,
-    load_audio,
     main,
-    process_audio,
-    remove_long_silences_multi,
     run_pool,
-    smooth_gain,
-    trim_silence_multi,
 )
 from tests.conftest import generate_sine_wave
 
@@ -773,7 +775,7 @@ def test_run_pool() -> None:
         mock_pool.return_value.__enter__.return_value = mock_pool_instance
         dashboard = run_pool(tasks)
 
-    mock_pool_instance.apply_async.assert_called_once_with(main_module.process_audio, (tasks[0],))
+    mock_pool_instance.apply_async.assert_called_once_with(process_audio, (tasks[0],))
     mock_live.assert_called_once()
     assert dashboard.total == 1
     assert dashboard.done == 1

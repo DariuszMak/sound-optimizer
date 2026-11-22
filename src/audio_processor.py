@@ -10,40 +10,24 @@ from numpy.typing import NDArray
 from pydub import AudioSegment
 from scipy.signal import lfilter
 
+from src.main import (
+    EQ_BANDS,
+    EQ_Q,
+    MAX_PRE_GAIN_DB,
+    TARGET_LUFS,
+    TRIM_THRESHOLD_DB,
+    TRUE_PEAK_CEILING_DB,
+    _progress_queue,
+    _worker_slot,
+)
+
 Float32Array: TypeAlias = NDArray[np.float32]
 Float64Array: TypeAlias = NDArray[np.float64]
 
-TARGET_LUFS = -16.0
-TRIM_THRESHOLD_DB = 45.0
-MAX_PRE_GAIN_DB = 30.0
-TRUE_PEAK_CEILING_DB = -1.0
-
-SUPPORTED = (".wav", ".mp3", ".flac", ".ogg", ".m4a", ".wma", ".mpc")
-INPUT_ROOT = "."
-OUTPUT_ROOT = "processed"
-EXCLUDED_DIRS = {".venv", "processed", "__pycache__"}
-
-NUMBER_OF_STEPS = 7
-
-FFMPEG_BINARY = "ffmpeg"
-ANSI_RED = "\033[91m"
-ANSI_RESET = "\033[0m"
 
 logger = logging.getLogger(__name__)
 
-EQ_BANDS: list[tuple[float, float]] = [
-    (60.0, 20 * np.log10(1.40)),
-    (230.0, 20 * np.log10(1.20)),
-    (910.0, 20 * np.log10(0.60)),
-    (3600.0, 20 * np.log10(0.90)),
-    (14000.0, 20 * np.log10(1.10)),
-]
-EQ_Q = 1.0
-
 warnings.filterwarnings("ignore")
-
-_worker_slot: int | None = None
-_progress_queue: Any = None
 
 
 def _emit(message: tuple[Any, ...]) -> None:
