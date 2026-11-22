@@ -4,7 +4,7 @@ from io import StringIO
 
 from rich.console import Console
 
-from src.dashboard import Dashboard
+from src.dashboard import Dashboard, _bar, _format_duration
 
 
 def _render_dashboard(dashboard: Dashboard, width: int, height: int) -> str:
@@ -12,6 +12,21 @@ def _render_dashboard(dashboard: Dashboard, width: int, height: int) -> str:
     console = Console(file=buffer, width=width, height=height, force_terminal=False, color_system=None)
     console.print(dashboard)
     return buffer.getvalue()
+
+
+def test_format_duration() -> None:
+    assert _format_duration(0) == "00:00"
+    assert _format_duration(-5) == "00:00"
+    assert _format_duration(65) == "01:05"
+    assert _format_duration(3661) == "1:01:01"
+
+
+def test_bar() -> None:
+    assert _bar(0.5, 10) == "█████░░░░░"
+    assert _bar(0.0, 4) == "░░░░"
+    assert _bar(1.0, 4) == "████"
+    assert _bar(2.0, 4) == "████"
+    assert _bar(-1.0, 4) == "░░░░"
 
 
 def test_dashboard_apply_counts() -> None:

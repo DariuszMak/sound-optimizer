@@ -58,21 +58,6 @@ def collect_audio_files() -> list[tuple[str, str]]:
     return tasks
 
 
-def _format_duration(seconds: float) -> str:
-    seconds = max(0, int(seconds))
-    hours, rest = divmod(seconds, 3600)
-    minutes, secs = divmod(rest, 60)
-    if hours:
-        return f"{hours:d}:{minutes:02d}:{secs:02d}"
-    return f"{minutes:02d}:{secs:02d}"
-
-
-def _bar(fraction: float, width: int) -> str:
-    fraction = min(1.0, max(0.0, fraction))
-    filled = round(width * fraction)
-    return "█" * filled + "░" * (width - filled)
-
-
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 

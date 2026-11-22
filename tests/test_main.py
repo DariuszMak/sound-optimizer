@@ -6,8 +6,6 @@ from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 from src.main import (
-    _bar,
-    _format_duration,
     check_ffmpeg_installed,
     collect_audio_files,
     main,
@@ -145,18 +143,3 @@ def test_main_missing_ffmpeg() -> None:
 
     mock_check.assert_called_once()
     mock_collect.assert_not_called()
-
-
-def test_format_duration() -> None:
-    assert _format_duration(0) == "00:00"
-    assert _format_duration(-5) == "00:00"
-    assert _format_duration(65) == "01:05"
-    assert _format_duration(3661) == "1:01:01"
-
-
-def test_bar() -> None:
-    assert _bar(0.5, 10) == "█████░░░░░"
-    assert _bar(0.0, 4) == "░░░░"
-    assert _bar(1.0, 4) == "████"
-    assert _bar(2.0, 4) == "████"
-    assert _bar(-1.0, 4) == "░░░░"

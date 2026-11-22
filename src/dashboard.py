@@ -7,8 +7,7 @@ import numpy as np
 from numpy.typing import NDArray
 from rich.text import Text
 
-from src.frontend.widgets.processing_widget import _format_duration
-from src.main import NUMBER_OF_STEPS, _bar
+from src.main import NUMBER_OF_STEPS
 
 if TYPE_CHECKING:
     from rich.console import Console, ConsoleOptions, RenderResult
@@ -21,6 +20,21 @@ logger = logging.getLogger(__name__)
 
 
 warnings.filterwarnings("ignore")
+
+
+def _format_duration(seconds: float) -> str:
+    seconds = max(0, int(seconds))
+    hours, rest = divmod(seconds, 3600)
+    minutes, secs = divmod(rest, 60)
+    if hours:
+        return f"{hours:d}:{minutes:02d}:{secs:02d}"
+    return f"{minutes:02d}:{secs:02d}"
+
+
+def _bar(fraction: float, width: int) -> str:
+    fraction = min(1.0, max(0.0, fraction))
+    filled = round(width * fraction)
+    return "█" * filled + "░" * (width - filled)
 
 
 class Dashboard:
