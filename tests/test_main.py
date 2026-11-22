@@ -15,6 +15,12 @@ from rich.console import Console
 
 from src import main as main_module
 from src.audio_processor import (
+    EQ_BANDS,
+    EQ_Q,
+    MAX_PRE_GAIN_DB,
+    TARGET_LUFS,
+    TRIM_THRESHOLD_DB,
+    TRUE_PEAK_CEILING_DB,
     _measure_lufs,
     _peaking_biquad,
     apply_eq_for_metering,
@@ -29,14 +35,8 @@ from src.audio_processor import (
     trim_silence_multi,
 )
 from src.main import (
-    EQ_BANDS,
-    EQ_Q,
-    MAX_PRE_GAIN_DB,
     NUMBER_OF_STEPS,
     SUPPORTED,
-    TARGET_LUFS,
-    TRIM_THRESHOLD_DB,
-    TRUE_PEAK_CEILING_DB,
     Dashboard,
     _bar,
     _format_duration,

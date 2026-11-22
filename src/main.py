@@ -20,10 +20,6 @@ from src.audio_processor import process_audio
 Float32Array: TypeAlias = NDArray[np.float32]
 Float64Array: TypeAlias = NDArray[np.float64]
 
-TARGET_LUFS = -16.0
-TRIM_THRESHOLD_DB = 45.0
-MAX_PRE_GAIN_DB = 30.0
-TRUE_PEAK_CEILING_DB = -1.0
 
 SUPPORTED = (".wav", ".mp3", ".flac", ".ogg", ".m4a", ".wma", ".mpc")
 INPUT_ROOT = "."
@@ -37,15 +33,6 @@ ANSI_RED = "\033[91m"
 ANSI_RESET = "\033[0m"
 
 logger = logging.getLogger(__name__)
-
-EQ_BANDS: list[tuple[float, float]] = [
-    (60.0, 20 * np.log10(1.40)),
-    (230.0, 20 * np.log10(1.20)),
-    (910.0, 20 * np.log10(0.60)),
-    (3600.0, 20 * np.log10(0.90)),
-    (14000.0, 20 * np.log10(1.10)),
-]
-EQ_Q = 1.0
 
 
 _worker_slot: int | None = None
