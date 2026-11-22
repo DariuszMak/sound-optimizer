@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 
 from rich.console import Console
 
+from src.dashboard import Dashboard
 from src.main import (
-    Dashboard,
     _bar,
     _format_duration,
     check_ffmpeg_installed,
