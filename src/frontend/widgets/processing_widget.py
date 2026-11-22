@@ -4,15 +4,9 @@ from PySide6.QtCore import QTimer, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QProgressBar, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
+from src.dashboard import _format_duration
 from src.frontend.processing.processing_state import ProcessingState
 from src.main import NUMBER_OF_STEPS
-
-
-def _format_duration(seconds: float) -> str:
-    seconds = max(0, int(seconds))
-    hours, rest = divmod(seconds, 3600)
-    minutes, secs = divmod(rest, 60)
-    return f"{hours:d}:{minutes:02d}:{secs:02d}" if hours else f"{minutes:02d}:{secs:02d}"
 
 
 class WorkerInfoWidget(QWidget):
