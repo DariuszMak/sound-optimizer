@@ -8,7 +8,6 @@ import numpy as np
 import pytest
 from pydub import AudioSegment
 
-from src import audio_processor as audio_processor_module
 from src.audio_processor import (
     EQ_BANDS,
     EQ_Q,
@@ -29,6 +28,7 @@ from src.audio_processor import (
     smooth_gain,
     trim_silence_multi,
 )
+from src.frontend.widgets import main_window as main_window_module
 from src.main import (
     NUMBER_OF_STEPS,
     SUPPORTED,
@@ -423,8 +423,8 @@ def test_process_audio_visualization(tmp_path: Path, sample_rate: int, monkeypat
     output_mp3 = str(tmp_path / "test_vis_output.mp3")
 
     mock_queue = MagicMock()
-    monkeypatch.setattr(audio_processor_module, "_progress_queue", mock_queue)
-    monkeypatch.setattr(audio_processor_module, "_worker_slot", 3)
+    monkeypatch.setattr(main_window_module, "_progress_queue", mock_queue)
+    monkeypatch.setattr(main_window_module, "_worker_slot", 3)
 
     process_audio((input_wav, output_mp3))
 
@@ -450,8 +450,8 @@ def test_process_audio_visualization(tmp_path: Path, sample_rate: int, monkeypat
 
 def test_process_audio_reports_status(tmp_path: Path, sample_rate: int, monkeypatch: pytest.MonkeyPatch) -> None:
     mock_queue = MagicMock()
-    monkeypatch.setattr(audio_processor_module, "_progress_queue", mock_queue)
-    monkeypatch.setattr(audio_processor_module, "_worker_slot", 0)
+    monkeypatch.setattr(main_window_module, "_progress_queue", mock_queue)
+    monkeypatch.setattr(main_window_module, "_worker_slot", 0)
 
     existing = tmp_path / "exists.mp3"
     existing.write_text("dummy")
