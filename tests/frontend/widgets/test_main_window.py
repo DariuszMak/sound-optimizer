@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import multiprocessing
 from queue import Empty
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, patch
@@ -9,10 +10,12 @@ import pytest
 from PySide6.QtWidgets import QMessageBox
 
 from src.frontend.processing.processing_state import ProcessingState
+from src.frontend.widgets import main_window as main_window_module
 from src.frontend.widgets.main_window import (
     MainWindow,
     _build_tasks,
     _file_dialog_filter,
+    _init_worker,
     _output_path,
     _PoolRunner,
     _scan_folder,
@@ -55,6 +58,21 @@ def _started_runner(tasks: list[tuple[str, str]] | None = None) -> tuple[_PoolRu
         runner = _PoolRunner(resolved_tasks)
         runner.start()
     return runner, mock_timer, mock_pool, mock_queue
+
+
+def test_init_worker() -> None:
+    counter = multiprocessing.Value("i", 0)
+
+    _init_worker(counter)
+    assert main_window_module._worker_slot == 0
+    assert main_window_module._progress_queue is None
+    assert counter.value == 1
+
+    queue = MagicMock()
+    _init_worker(counter, queue)
+    assert main_window_module._worker_slot == 1
+    assert main_window_module._progress_queue is queue
+    assert counter.value == 2
 
 
 def test_file_dialog_filter() -> None:

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import multiprocessing
 import os
 from typing import TYPE_CHECKING, cast
 from unittest.mock import MagicMock, patch
@@ -30,7 +29,6 @@ from src.audio_processor import (
     smooth_gain,
     trim_silence_multi,
 )
-from src.frontend.widgets.main_window import _init_worker
 from src.main import (
     NUMBER_OF_STEPS,
     SUPPORTED,
@@ -511,18 +509,3 @@ def test_format_loudness_params_edge_cases(
     expected: str,
 ) -> None:
     assert format_loudness_params(lufs_dry, lufs_eq, gain_db) == expected
-
-
-def test_init_worker() -> None:
-    counter = multiprocessing.Value("i", 0)
-
-    _init_worker(counter)
-    assert audio_processor_module._worker_slot == 0
-    assert audio_processor_module._progress_queue is None
-    assert counter.value == 1
-
-    queue = MagicMock()
-    _init_worker(counter, queue)
-    assert audio_processor_module._worker_slot == 1
-    assert audio_processor_module._progress_queue is queue
-    assert counter.value == 2
