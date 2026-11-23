@@ -12,13 +12,31 @@ from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QCloseEvent, QFont
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget
 
-from src.audio_processor import _init_worker, process_audio
+from src.audio_processor import process_audio
 from src.frontend.processing.processing_state import ProcessingState
 from src.frontend.widgets.processing_widget import ProcessingWidget
 from src.main import EXCLUDED_DIRS, INPUT_ROOT, OUTPUT_ROOT, SUPPORTED, check_ffmpeg_installed
 
 logger = logging.getLogger(__name__)
 _POLL_INTERVAL_MS = 100
+
+
+_worker_slot: int | None = None
+_progress_queue: Any = None
+
+
+def _init_worker(counter: Any, progress_queue: Any = None) -> None:
+    global _progress_queue, _worker_slot
+    _progress_queue = progress_queue
+    with counter.get_lock():
+        _worker_slot = counter.value
+        counter.value += 1
+
+
+def _emit(message: tuple[Any, ...]) -> None:
+    if _progress_queue is not None:
+        with contextlib.suppress(Exception):
+            _progress_queue.put(message)
 
 
 def _file_dialog_filter() -> str:

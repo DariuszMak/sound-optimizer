@@ -17,7 +17,6 @@ from src.audio_processor import (
     TARGET_LUFS,
     TRIM_THRESHOLD_DB,
     TRUE_PEAK_CEILING_DB,
-    _init_worker,
     _measure_lufs,
     _peaking_biquad,
     apply_eq_for_metering,
@@ -31,6 +30,7 @@ from src.audio_processor import (
     smooth_gain,
     trim_silence_multi,
 )
+from src.frontend.widgets.main_window import _init_worker
 from src.main import (
     NUMBER_OF_STEPS,
     SUPPORTED,

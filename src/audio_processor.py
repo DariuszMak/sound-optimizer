@@ -1,14 +1,15 @@
-import contextlib
 import logging
 import os
 import warnings
-from typing import Any, TypeAlias, cast
+from typing import TypeAlias, cast
 
 import numpy as np
 import pyloudnorm as pyln
 from numpy.typing import NDArray
 from pydub import AudioSegment
 from scipy.signal import lfilter
+
+from src.frontend.widgets.main_window import _emit
 
 Float32Array: TypeAlias = NDArray[np.float32]
 Float64Array: TypeAlias = NDArray[np.float64]
@@ -28,27 +29,10 @@ EQ_BANDS: list[tuple[float, float]] = [
 ]
 EQ_Q = 1.0
 
-_worker_slot: int | None = None
-_progress_queue: Any = None
-
 
 logger = logging.getLogger(__name__)
 
 warnings.filterwarnings("ignore")
-
-
-def _init_worker(counter: Any, progress_queue: Any = None) -> None:
-    global _progress_queue, _worker_slot
-    _progress_queue = progress_queue
-    with counter.get_lock():
-        _worker_slot = counter.value
-        counter.value += 1
-
-
-def _emit(message: tuple[Any, ...]) -> None:
-    if _progress_queue is not None:
-        with contextlib.suppress(Exception):
-            _progress_queue.put(message)
 
 
 def format_loudness_params(
