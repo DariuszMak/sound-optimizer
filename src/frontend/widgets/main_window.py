@@ -12,7 +12,6 @@ from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QCloseEvent, QFont
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget
 
-from src.audio_processor import process_audio
 from src.frontend.processing.processing_state import ProcessingState
 from src.frontend.widgets.processing_widget import ProcessingWidget
 from src.main import EXCLUDED_DIRS, INPUT_ROOT, OUTPUT_ROOT, SUPPORTED, check_ffmpeg_installed
@@ -185,6 +184,8 @@ class _PoolRunner(QObject):
         self.state_updated.emit(self._state)
 
     def start(self) -> None:
+        from src.audio_processor import process_audio
+
         slot_counter = Value("i", 0)
         self._queue = Queue()
         self._state = ProcessingState(total=len(self._tasks))

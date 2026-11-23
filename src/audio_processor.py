@@ -9,7 +9,7 @@ from numpy.typing import NDArray
 from pydub import AudioSegment
 from scipy.signal import lfilter
 
-from src.frontend.widgets.main_window import _emit
+from src.frontend.widgets import main_window
 
 Float32Array: TypeAlias = NDArray[np.float32]
 Float64Array: TypeAlias = NDArray[np.float64]
@@ -273,12 +273,12 @@ def export_audio(
 
 def process_audio(task: tuple[str, str]) -> None:
     input_path, output_path = task
-    worker_id = _worker_slot if _worker_slot is not None else 0
+    worker_id = main_window._worker_slot if main_window._worker_slot is not None else 0
     file_name = os.path.basename(input_path)
     status = "failed"
 
     def report(step: int, description: str, details: str = "") -> None:
-        _emit(("step", worker_id, file_name, step, description, details))
+        main_window._emit(("step", worker_id, file_name, step, description, details))
 
     try:
         if os.path.exists(output_path):
@@ -343,4 +343,4 @@ def process_audio(task: tuple[str, str]) -> None:
     except Exception:
         status = "failed"
     finally:
-        _emit(("done", worker_id, file_name, status))
+        main_window._emit(("done", worker_id, file_name, status))
